@@ -1,0 +1,3 @@
+import LeadForm from '@/components/LeadForm';
+export const metadata={title:'Anuncie sua empresa'};
+export default async function Advertise({searchParams}:{searchParams:Promise<{interesse?:string}>}){const {interesse}=await searchParams;return <main className="wrap article-page"><span className="eyebrow">Conexões que movimentam a cidade</span><h1>Sua marca merece<br/>ser vista em Itajubá.</h1><p className="article-excerpt">Converse com nossa equipe sobre banners e parcerias. Valores e disponibilidade são definidos em proposta.</p><LeadForm interest={['Banner premium','Banner lateral','Patrocínio de editoria'].includes(interesse||'')?interesse!:'Banner premium'}/></main>}

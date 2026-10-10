@@ -1,0 +1,7 @@
+import {notFound} from 'next/navigation';
+import {api,Article,dateLabel} from '@/lib/api';
+import type {Metadata} from 'next';
+export const dynamic='force-dynamic';
+async function article(slug:string){const url=(process.env.API_URL||'http://localhost:4000/api')+'/articles/'+encodeURIComponent(slug);const r=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(8000)});if(r.status===404)notFound();if(!r.ok)throw new Error('Matéria indisponível');return r.json() as Promise<Article>;}
+export async function generateMetadata({params}:{params:Promise<{slug:string}>}):Promise<Metadata>{const a=await article((await params).slug);return {title:a.title,description:a.excerpt,alternates:{canonical:'/noticias/'+a.slug},robots:a.demo?{index:false,follow:false}:undefined,openGraph:{type:'article',title:a.title,description:a.excerpt,images:a.imageUrl?[a.imageUrl]:[]}};}
+export default async function News({params}:{params:Promise<{slug:string}>}){const a=await article((await params).slug);return <main className="wrap article-page">{a.demo&&<div className="notice">Matéria demonstrativa. Não relata um acontecimento real. Fotografia ilustrativa.</div>}<span className="category">Itajubá News</span><h1>{a.title}</h1><p className="article-excerpt">{a.excerpt}</p><div className="meta">Por {a.author} · {dateLabel(a.publishedAt)}</div>{a.imageUrl&&<img className="article-image" src={a.imageUrl} alt="Imagem da matéria"/>}<div className="article-content">{a.content.split('\n').filter(Boolean).map((text,i)=><p key={i}>{text}</p>)}</div></main>}

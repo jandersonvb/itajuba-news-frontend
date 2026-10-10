@@ -1,0 +1,6 @@
+import {cookies} from 'next/headers';
+import {NextRequest,NextResponse} from 'next/server';
+import {apiUrl} from './api';
+export function sameOrigin(req:NextRequest){return req.headers.get('origin')===(process.env.SITE_URL?new URL(process.env.SITE_URL).origin:req.nextUrl.origin);}
+export async function proxy(req:NextRequest,path:string,auth=true){if(!['GET','HEAD'].includes(req.method)&&!sameOrigin(req))return NextResponse.json({message:'Origem inválida'},{status:403});const token=(await cookies()).get('itajuba-session')?.value;if(auth&&!token)return NextResponse.json({message:'Faça login'},{status:401});try{const body=req.method==='GET'?undefined:await req.text();if(body&&Buffer.byteLength(body)>150000)return NextResponse.json({message:'Conteúdo muito grande'},{status:413});const r=await fetch(apiUrl()+path,{method:req.method,headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+token}:{})},body,cache:'no-store',signal:AbortSignal.timeout(10000)});const text=await r.text();return new NextResponse(text,{status:r.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});}catch{return NextResponse.json({message:'API indisponível'},{status:503})}}
+export const resources=['articles','sponsors','campaigns','leads'];
