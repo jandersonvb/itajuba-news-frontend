@@ -8,3 +8,6 @@ coverage/
 *.tsbuildinfo
 *.log
 .DS_Store
+
+# Worktrees criados por sessões do Claude Code
+.claude/worktrees/

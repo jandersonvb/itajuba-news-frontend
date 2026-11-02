@@ -514,6 +514,17 @@ body:has(.adm[data-theme='light']) { background: #f4f4f6; }
 
 .adm-scrim { display: none; }
 
+/* Unsaved article texts kept in this browser (src/lib/article-drafts.ts). */
+.adm-drafts { display: grid; gap: 10px; margin-bottom: 20px; }
+.adm-drafts p,
+.adm-draft-offer p { margin: 0; }
+.adm-drafts ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.adm-drafts li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.adm-drafts li > span { display: grid; flex: 1 1 220px; min-width: 0; }
+.adm-drafts li b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-draft-offer { display: grid; gap: 10px; margin-bottom: 16px; }
+.adm-draft-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 /* Tablets and phones: the sidebar becomes an off-canvas menu. */
 @media (max-width: 960px) {
   .adm,

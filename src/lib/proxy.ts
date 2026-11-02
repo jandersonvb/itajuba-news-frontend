@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { revalidateTag } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { apiHeaders, apiUrl, PUBLIC_CACHE_TAG } from './api';
+import { isCloudflareIp } from './cloudflare-ips';
 import { SESSION_COOKIE } from './session';
 
 export const resources = ['articles', 'categories', 'sponsors', 'campaigns', 'media', 'leads', 'users'];
@@ -15,28 +16,40 @@ const IP_HEADER = (process.env.CLIENT_IP_HEADER || 'x-forwarded-for').trim().toL
 /** IPv4 or IPv6: anything else in the header is ignored. */
 const IP_PATTERN = /^[0-9a-f.:]{1,64}$/i;
 
+/** The IP in a header: the last entry of x-forwarded-for, the first of any other list. Null if missing or not an IP. */
+function headerIp(req: NextRequest, name: string) {
+  const entries = req.headers.get(name)?.split(',');
+  if (!entries) return null;
+  const ip = (name === 'x-forwarded-for' ? entries[entries.length - 1] : entries[0]).trim();
+  return IP_PATTERN.test(ip) ? ip : null;
+}
+
 /**
- * Visitor IP, sent to the API as `x-client-ip` for the per-visitor rate limit. CLIENT_IP_HEADER
- * names the header the provider's proxy sets:
+ * Visitor IP, sent to the API as `x-client-ip` for the per-visitor rate limit. Without it the API
+ * does not limit the request at all. CLIENT_IP_HEADER names the header the provider's proxy sets:
  *
- * | Provider                            | CLIENT_IP_HEADER                                             |
- * | ----------------------------------- | ------------------------------------------------------------ |
- * | Vercel                              | x-forwarded-for (default; Vercel overwrites it) or x-real-ip |
- * | Railway                             | x-real-ip                                                    |
- * | Render                              | cf-connecting-ip                                             |
- * | Cloudflare in front of any provider | cf-connecting-ip                                             |
+ * | Provider                                         | CLIENT_IP_HEADER                                |
+ * | ------------------------------------------------ | ----------------------------------------------- |
+ * | Railway                                          | x-real-ip                                       |
+ * | Railway behind Cloudflare's proxy (orange cloud) | cf-connecting-ip                                |
+ * | Vercel                                           | x-forwarded-for (default; Vercel overwrites it) |
+ * | Render                                           | cf-connecting-ip                                |
  *
  * For x-forwarded-for, the last entry: the one recorded by the closest proxy. Next.js fills that
  * header from the socket only when it is absent, so the proxy must append to it or overwrite it.
- * Behind Cloudflare the last entry is Cloudflare's own address, and every visitor would share it.
  * Any other header holds the visitor's address itself; if it is a list, the first entry.
- * Null when the header is missing or does not look like an IP.
+ *
+ * cf-connecting-ip is believed only when the connection came from Cloudflare, that is, when the
+ * address that reached the provider (`x-real-ip` on Railway, else the last x-forwarded-for entry)
+ * is in Cloudflare's ranges. Anyone who skips Cloudflare, through a leftover *.up.railway.app
+ * domain or by connecting to the provider with the portal's Host, sends no such header or forges
+ * one; they are limited by the address they connected from.
  */
 export function clientIp(req: NextRequest) {
-  const entries = req.headers.get(IP_HEADER)?.split(',');
-  if (!entries) return null;
-  const ip = (IP_HEADER === 'x-forwarded-for' ? entries[entries.length - 1] : entries[0]).trim();
-  return IP_PATTERN.test(ip) ? ip : null;
+  if (IP_HEADER !== 'cf-connecting-ip') return headerIp(req, IP_HEADER);
+  const peer = headerIp(req, 'x-real-ip') ?? headerIp(req, 'x-forwarded-for');
+  if (peer && isCloudflareIp(peer)) return headerIp(req, 'cf-connecting-ip') ?? peer;
+  return peer;
 }
 
 export async function proxy(req: NextRequest, path: string, auth = true) {

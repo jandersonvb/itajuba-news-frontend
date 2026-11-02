@@ -15,9 +15,13 @@ export const SITE = {
     privacy: '[PREENCHER: e-mail do encarregado / privacidade]',
   },
   /** Provedores que recebem dados pessoais (hospedagem, banco, e-mail transacional), com o país. */
-  processors: ['Vercel (EUA) — hospedagem do site', 'Railway (EUA) — API, banco de dados e imagens', 'Resend (EUA) — e-mails do painel e avisos de pedidos comerciais à equipe'],
+  processors: [
+    'Railway (EUA) — hospedagem do site, da API, do banco de dados e das imagens',
+    'Cloudflare (EUA) — DNS, proteção contra ataques e cache do site; recebe o endereço IP de quem acessa',
+    'Resend (EUA) — e-mails do painel e avisos de pedidos comerciais à equipe',
+  ],
   forum: 'Itajubá/MG',
-  privacyUpdatedAt: '2026-10-11',
+  privacyUpdatedAt: '2026-11-02',
   termsUpdatedAt: '2026-10-11',
 };
 

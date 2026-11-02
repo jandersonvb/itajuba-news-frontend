@@ -7,8 +7,8 @@ import { SESSION_COOKIE } from '@/lib/session';
 /** Same limit as the API. */
 const MAX_FILE_BYTES = 4 * 1024 * 1024;
 /**
- * The file plus the multipart envelope (boundary, part headers, file name): 4.5 MB, the most
- * Vercel accepts in the body of a request to a function.
+ * The file plus the multipart envelope (boundary, part headers, file name): 4.5 MB. It is also the
+ * most Vercel accepts in the body of a request to a function, so the limit holds on either host.
  */
 const MAX_BODY_BYTES = MAX_FILE_BYTES + 512 * 1024;
 

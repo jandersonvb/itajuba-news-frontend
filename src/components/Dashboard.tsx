@@ -7,8 +7,34 @@ import { adminFetch, type AdminTheme, errorMessage, failure, IMAGE_TYPES, SESSIO
 import { Resource, roleNames, tabsByRole } from '@/lib/permissions';
 import Icon, { type IconName } from './admin/Icon';
 import { Drawer, Dropdown, Field, ImageField, Select, slugify, Switch, TextArea } from './admin/ui';
+import {
+  type ArticleDraft,
+  deleteAllDrafts,
+  deleteDraft,
+  type DraftFields,
+  draftTimeLabel,
+  listDrafts,
+  readDraft,
+  readFields,
+  sameFields,
+  saveDraft,
+  type StoredDraft,
+} from '@/lib/article-drafts';
 
 type Row = { id: string; title?: string; name?: string; status?: string; active?: boolean; email?: string; role?: UserRole; interest?: string; message?: string; createdAt?: string; pending?: boolean; inviteExpiresAt?: string | null; inviteSent?: boolean; [key: string]: unknown };
+
+/** Open form: the row being edited (null for a new record) and, for articles, the local draft. */
+type OpenForm = {
+  row: Row | null;
+  /** Article id of the draft key: the row's, or that of a deleted article whose draft opened a new form. */
+  draftId: string | null;
+  /** Draft values the article fields were (re)mounted with, by "Restaurar" or by "Abrir" in the list. */
+  restored?: DraftFields;
+  /** Stored draft that differs from the article, offered with "Restaurar" and "Descartar". */
+  offer?: ArticleDraft;
+  /** Bumped by "Restaurar": the uncontrolled fields remount with the draft values. */
+  version: number;
+};
 
 type Tab = { title: string; icon: IconName; description: string; singular?: string; create?: string };
 
@@ -46,10 +72,27 @@ const themes: { value: AdminTheme; label: string; icon: IconName }[] = [
 /** Short label next to the role in the account menu. */
 const accessTags: Record<UserRole, string> = { admin: 'acesso total', editor: 'editorial', reporter: 'rascunhos' };
 
-const dateInput = (v: unknown) => (typeof v === 'string' ? new Date(v).toISOString().slice(0, 16) : '');
+/** Campaigns are scheduled in Brasília time. Brazil has had no daylight saving time since 2019, so the offset is fixed. */
+const BRASILIA_OFFSET = '-03:00';
+const brasiliaParts = (v: string) =>
+  Object.fromEntries(
+    new Intl.DateTimeFormat('pt-BR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Sao_Paulo' })
+      .formatToParts(new Date(v))
+      .map((p) => [p.type, p.value]),
+  );
+/** Value of a datetime-local input (`YYYY-MM-DDTHH:mm`), in Brasília time. */
+const dateInput = (v: unknown) => {
+  if (typeof v !== 'string') return '';
+  const p = brasiliaParts(v);
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+};
 const dateLabel = (v: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(v));
-/** Campaign dates are entered in UTC (see the form), so the list shows them in UTC too. */
-const dayLabel = (v: unknown) => (typeof v === 'string' ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'UTC' }).format(new Date(v)) : '—');
+/** Campaign start or end, in Brasília time like the form: "12/10/2026 08:00". */
+const dayLabel = (v: unknown) => {
+  if (typeof v !== 'string') return '—';
+  const p = brasiliaParts(v);
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+};
 const sizeLabel = (bytes: number) => (bytes === 0 ? '0 KB' : bytes >= 1024 * 1024 ? (bytes / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB' : Math.max(1, Math.round(bytes / 1024)).toLocaleString('pt-BR') + ' KB');
 const plain = (v: unknown) => String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const initials = (v: string) => v.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
@@ -177,8 +220,11 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  /** Open form: the row being edited, or null for a new record. */
-  const [form, setForm] = useState<{ row: Row | null } | null>(null);
+  const [form, setForm] = useState<OpenForm | null>(null);
+  /** This user's unsaved article texts in this browser, listed on the Notícias tab. */
+  const [drafts, setDrafts] = useState<StoredDraft[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [formError, setFormError] = useState('');
   const [resetting, setResetting] = useState<Row | null>(null);
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'error'; id: number } | null>(null);
@@ -228,8 +274,98 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     return () => controller.abort();
   }, [load]);
 
+  useEffect(() => {
+    if (resource === 'articles') setDrafts(listDrafts(me.id));
+  }, [resource, me.id]);
+
+  /** Values the article form opens with: the same defaults as the fields below. */
+  const articleDefaults = (row: Row | null): DraftFields => ({
+    title: String(row?.title ?? ''),
+    slug: String(row?.slug ?? ''),
+    excerpt: String(row?.excerpt ?? ''),
+    content: String(row?.content ?? ''),
+    imageUrl: String(row?.imageUrl ?? ''),
+    categoryId: String(row?.categoryId || categories[0]?.id || ''),
+    author: String(row?.author || 'Redação Itajubá News'),
+    // Reporters have neither field: FormData has no status and no featured for them.
+    status: reporter ? '' : String(row?.status || 'draft'),
+    featured: !reporter && !!row?.featured,
+  });
+  const updatedAtOf = (row: Row | null) => (typeof row?.updatedAt === 'string' ? row.updatedAt : null);
+
+  /**
+   * Writes the open article form to its local draft, or deletes the draft when the fields are back
+   * to what the article has. While a stored draft waits for "Restaurar"/"Descartar" it is left alone,
+   * unless `force` (Salvar, which must keep what is being sent in case the session expired).
+   */
+  function storeDraft(force = false) {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = undefined;
+    const el = formRef.current;
+    if (!form || !el || resource !== 'articles' || readOnly || (form.offer && !force)) return;
+    const fields = readFields(el);
+    if (sameFields(fields, articleDefaults(form.row))) deleteDraft(me.id, form.draftId);
+    else saveDraft(me.id, form.draftId, fields, updatedAtOf(form.row));
+  }
+  // The debounce timer and the pagehide listener run outside a render, so they call the latest version.
+  const storeDraftRef = useRef(storeDraft);
+  useEffect(() => {
+    storeDraftRef.current = storeDraft;
+  });
+
+  const articleFormOpen = resource === 'articles' && !!form;
+  useEffect(() => {
+    if (!articleFormOpen) return;
+    const flush = () => storeDraftRef.current();
+    const onVisibility = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [articleFormOpen]);
+
+  function onFormInput(e: React.FormEvent<HTMLFormElement>) {
+    syncSlug(e);
+    if (resource !== 'articles' || readOnly) return;
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => storeDraftRef.current(), 800);
+  }
+
+  /** Esc, X and Cancelar: the draft stays (a pending debounce is written now); only a save removes it. */
+  function closeForm() {
+    if (draftTimer.current) storeDraft();
+    setForm(null);
+    if (resource === 'articles') setDrafts(listDrafts(me.id));
+  }
+
+  function restoreDraft() {
+    if (form?.offer) setForm({ ...form, restored: form.offer.fields, offer: undefined, version: form.version + 1 });
+  }
+
+  function discardOffer() {
+    if (!form) return;
+    deleteDraft(me.id, form.draftId);
+    setDrafts(listDrafts(me.id));
+    setForm({ ...form, offer: undefined });
+  }
+
+  /** "Abrir" in the list: the article (or, if it was deleted, a new one) with the draft already in the fields. */
+  function openDraft(draft: StoredDraft) {
+    openForm(draft.articleId ? rows.find((r) => r.id === draft.articleId) ?? null : null, draft);
+  }
+
+  function discardStoredDraft(draft: StoredDraft) {
+    if (!confirm('Descartar este texto não salvo? Ele não poderá ser recuperado.')) return;
+    deleteDraft(me.id, draft.articleId);
+    setDrafts(listDrafts(me.id));
+  }
+
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Written before sending: if the session expired, the 401 goes to the login and the text stays here.
+    if (resource === 'articles') storeDraft(true);
     setBusy(true);
     setFormError('');
     const d = new FormData(e.currentTarget);
@@ -248,9 +384,14 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
       data = { name: d.get('name'), websiteUrl: d.get('websiteUrl'), active: d.get('active') === 'on' };
       if (d.get('logoUrl')) data.logoUrl = d.get('logoUrl');
     }
-    if (resource === 'campaigns') data = { name: d.get('name'), sponsorId: d.get('sponsorId'), slot: d.get('slot'), imageUrl: d.get('imageUrl'), targetUrl: d.get('targetUrl'), startsAt: new Date(String(d.get('startsAt')) + ':00Z').toISOString(), endsAt: new Date(String(d.get('endsAt')) + ':00Z').toISOString(), active: d.get('active') === 'on' };
+    if (resource === 'campaigns') data = { name: d.get('name'), sponsorId: d.get('sponsorId'), slot: d.get('slot'), imageUrl: d.get('imageUrl'), targetUrl: d.get('targetUrl'), startsAt: new Date(String(d.get('startsAt')) + ':00' + BRASILIA_OFFSET).toISOString(), endsAt: new Date(String(d.get('endsAt')) + ':00' + BRASILIA_OFFSET).toISOString(), active: d.get('active') === 'on' };
     try {
       const saved = await send<Row>('/api/admin/' + resource + (edit ? '/' + edit.id : ''), edit ? 'PATCH' : 'POST', data);
+      if (resource === 'articles' && form) {
+        clearTimeout(draftTimer.current);
+        deleteDraft(me.id, form.draftId);
+        setDrafts(listDrafts(me.id));
+      }
       setForm(null);
       await load();
       // New users (and a corrected e-mail of someone invited) get an invitation by e-mail.
@@ -325,9 +466,23 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     window.history.replaceState(null, '', tabHref(r));
   }
 
-  function openForm(row: Row | null) {
+  /**
+   * Opens the form. An article with a local draft that differs from it shows "Restaurar" and
+   * "Descartar"; `opened` (from the list) fills the fields with the draft right away.
+   */
+  function openForm(row: Row | null, opened?: StoredDraft) {
     setFormError('');
-    setForm({ row });
+    if (resource !== 'articles') return setForm({ row, draftId: null, version: 0 });
+    const draftId = opened ? opened.articleId : row?.id ?? null;
+    if (opened) return setForm({ row, draftId, restored: opened.fields, version: 0 });
+    const draft = readDraft(me.id, draftId);
+    if (draft && sameFields(draft.fields, articleDefaults(row))) {
+      // Nothing left to recover: the article already has this text.
+      deleteDraft(me.id, draftId);
+      setDrafts(listDrafts(me.id));
+    }
+    const offer = draft && !sameFields(draft.fields, articleDefaults(row)) && !lockedForReporter(row) ? draft : undefined;
+    setForm({ row, draftId, offer, version: 0 });
   }
 
   function toggleNav() {
@@ -340,9 +495,12 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     const target = e.target as HTMLInputElement;
     const slug = e.currentTarget.elements.namedItem('slug');
     if (!(slug instanceof HTMLInputElement)) return;
+    // A restored slug that was typed by hand (it differs from the title's) is kept as well.
+    const restored = form?.restored;
+    const restoredByHand = !!restored && restored.slug !== slugify(restored.title);
     if (target === slug) slug.dataset.edited = '1';
     // An existing slug is the public address: it only changes when typed on purpose.
-    else if (!edit && (target.name === 'title' || target.name === 'name') && !slug.dataset.edited) slug.value = slugify(target.value);
+    else if (!edit && (target.name === 'title' || target.name === 'name') && !slug.dataset.edited && !restoredByHand) slug.value = slugify(target.value);
   }
 
   async function uploadFiles(files: FileList | File[]) {
@@ -378,7 +536,12 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     document.cookie = `${THEME_COOKIE}=${value}; path=/admin; max-age=31536000; samesite=lax`;
   }
 
+  /** Leaving on purpose deletes the drafts (after asking); an expired session (401) never does. */
   async function logout() {
+    if (listDrafts(me.id).length) {
+      if (!confirm('Você tem textos não salvos neste navegador. Sair e apagá-los?')) return;
+      deleteAllDrafts(me.id);
+    }
     await fetch('/api/auth/logout', { method: 'POST' });
     router.replace('/admin/login');
     router.refresh();
@@ -455,7 +618,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
         </div>
       ) },
       { label: 'Posição', cell: (r) => slots[String(r.slot)] ?? String(r.slot) },
-      { label: 'Vigência (UTC)', cell: (r) => <>{dayLabel(r.startsAt)} <span className="adm-faint">→</span> {dayLabel(r.endsAt)}</> },
+      { label: 'Vigência', cell: (r) => <>{dayLabel(r.startsAt)} <span className="adm-faint">→</span> {dayLabel(r.endsAt)}</> },
       { label: 'Status', cell: (r) => { const [label, tone] = campaignState(r); return <Pill tone={tone}>{label}</Pill>; } },
     ],
     leads: [
@@ -586,6 +749,26 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
 
   const self = edit?.id === me.id;
   const formTitle = readOnly ? 'Matéria publicada' : edit ? 'Editar ' + tab.singular : tab.create ?? '';
+  /** Article fields: the restored draft or the article (defaults for a new one). */
+  const values = form?.restored ?? articleDefaults(edit);
+
+  const draftList = resource === 'articles' && !loading && drafts.length > 0 && (
+    <section className="adm-callout adm-drafts" aria-label="Textos não salvos">
+      <p><b>{drafts.length === 1 ? 'Você tem 1 texto não salvo neste navegador.' : `Você tem ${drafts.length} textos não salvos neste navegador.`}</b></p>
+      <ul>
+        {drafts.map((d) => (
+          <li key={d.articleId ?? 'nova'}>
+            <span>
+              <b>{d.fields.title.trim() || 'Sem título'}</b>
+              <small>{d.articleId ? 'Edição' : 'Nova notícia'} · {draftTimeLabel(d.savedAt)}</small>
+            </span>
+            <button type="button" className="adm-btn" disabled={busy} onClick={() => openDraft(d)}>Abrir</button>
+            <button type="button" className="adm-btn ghost" onClick={() => discardStoredDraft(d)}>Descartar</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 
   return (
     <div className={'adm' + (collapsed ? ' collapsed' : '') + (menuOpen ? ' menu-open' : '')} data-theme={theme}>
@@ -713,6 +896,8 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
             </div>
           )}
 
+          {draftList}
+
           <section className={'adm-card' + (dragging ? ' dragging' : '')} aria-label={tab.title} {...dropProps}>
             <div className="adm-toolbar">
               <label className="adm-search">
@@ -744,39 +929,52 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
           busy={busy}
           error={formError}
           onSubmit={save}
-          onInput={syncSlug}
-          onClose={() => setForm(null)}
+          onInput={onFormInput}
+          onClose={closeForm}
+          formRef={formRef}
         >
+          {form.offer && (
+            <div className="adm-callout adm-draft-offer" role="status">
+              <p>
+                Há um texto não salvo neste navegador, de {draftTimeLabel(form.offer.savedAt)}.
+                {form.offer.baseUpdatedAt !== updatedAtOf(form.row) && ' A matéria foi alterada no painel depois disso. Restaurar substitui essas alterações.'}
+              </p>
+              <div className="adm-draft-actions">
+                <button type="button" className="adm-btn primary" onClick={restoreDraft}>Restaurar</button>
+                <button type="button" className="adm-btn" onClick={discardOffer}>Descartar</button>
+              </div>
+            </div>
+          )}
           {readOnly && <p className="adm-callout info">Somente leitura: a matéria já foi publicada. Para alterá-la, fale com um editor.</p>}
-          <fieldset className="adm-fieldset" disabled={readOnly}>
+          <fieldset className="adm-fieldset" disabled={readOnly} key={form.version}>
             {resource === 'articles' && <>
               <div className="adm-form-section">
                 <h3>Conteúdo</h3>
-                <Field name="title" label="Título" value={edit?.title} maxLength={200} autoFocus={!edit}/>
-                <Field name="slug" label="Slug" value={edit?.slug} maxLength={220} hint={edit ? 'Endereço público da matéria. Mudar quebra links já compartilhados.' : 'Preenchido a partir do título. Forma o endereço /noticias/slug.'}/>
-                <TextArea name="excerpt" label="Resumo" value={edit?.excerpt} rows={3} minLength={10} maxLength={500} hint="Aparece na home e quando a matéria é compartilhada."/>
-                <TextArea name="content" label="Texto da matéria" value={edit?.content} rows={12} minLength={20} maxLength={100000} hint="Texto simples. Cada linha vira um parágrafo."/>
+                <Field name="title" label="Título" value={values.title} maxLength={200} autoFocus={!edit}/>
+                <Field name="slug" label="Slug" value={values.slug} maxLength={220} hint={edit ? 'Endereço público da matéria. Mudar quebra links já compartilhados.' : 'Preenchido a partir do título. Forma o endereço /noticias/slug.'}/>
+                <TextArea name="excerpt" label="Resumo" value={values.excerpt} rows={3} minLength={10} maxLength={500} hint="Aparece na home e quando a matéria é compartilhada."/>
+                <TextArea name="content" label="Texto da matéria" value={values.content} rows={12} minLength={20} maxLength={100000} hint="Texto simples. Cada linha vira um parágrafo."/>
               </div>
               <div className="adm-form-section">
                 <h3>Imagem</h3>
-                <ImageField name="imageUrl" label="Imagem de capa (opcional)" value={edit?.imageUrl}/>
+                <ImageField name="imageUrl" label="Imagem de capa (opcional)" value={values.imageUrl}/>
               </div>
               <div className="adm-form-section">
                 <h3>Publicação</h3>
                 <div className="adm-grid-2">
-                  <Select name="categoryId" label="Editoria" value={edit?.categoryId || categories[0]?.id || ''} required>
+                  <Select name="categoryId" label="Editoria" value={values.categoryId} required>
                     {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </Select>
-                  <Field name="author" label="Autoria" value={edit?.author || 'Redação Itajubá News'} maxLength={100}/>
+                  <Field name="author" label="Autoria" value={values.author} maxLength={100}/>
                 </div>
                 {reporter ? (
                   !readOnly && <p className="adm-callout info">A notícia fica como rascunho. Um editor revisa e publica.</p>
                 ) : <>
-                  <Select name="status" label="Status" value={edit?.status || 'draft'}>
+                  <Select name="status" label="Status" value={values.status || 'draft'}>
                     <option value="draft">Rascunho: só no painel</option>
                     <option value="published">Publicada: visível no portal</option>
                   </Select>
-                  <Switch name="featured" label="Destaque na página inicial" description="Entra no bloco de destaques do topo da home." checked={!!edit?.featured}/>
+                  <Switch name="featured" label="Destaque na página inicial" description="Entra no bloco de destaques do topo da home." checked={values.featured}/>
                 </>}
               </div>
             </>}
@@ -809,8 +1007,8 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
               <ImageField name="imageUrl" label="Imagem do banner" value={edit?.imageUrl} required/>
               <Field name="targetUrl" label="URL de destino" value={edit?.targetUrl} type="url" placeholder="https://"/>
               <div className="adm-grid-2">
-                <Field name="startsAt" label="Início (UTC)" value={dateInput(edit?.startsAt)} type="datetime-local"/>
-                <Field name="endsAt" label="Fim (UTC)" value={dateInput(edit?.endsAt)} type="datetime-local"/>
+                <Field name="startsAt" label="Início (horário de Brasília)" value={dateInput(edit?.startsAt)} type="datetime-local"/>
+                <Field name="endsAt" label="Fim (horário de Brasília)" value={dateInput(edit?.endsAt)} type="datetime-local"/>
               </div>
               <Switch name="active" label="Campanha ativa" description="Cada posição exibe a campanha ativa mais recente." checked={edit ? !!edit.active : true}/>
             </>}

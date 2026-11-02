@@ -48,7 +48,7 @@ O setup cria `.env.local`, sem sobrescrever configurações existentes. Configur
 
 As imagens enviadas pelo painel ficam na API e são referenciadas como `/media/<arquivo>`. O `next.config.ts` repassa `/media/*` para `API_URL + /media/*` (rewrite), então elas carregam na mesma origem do portal e o navegador não fala direto com a API. Esse destino é lido no `next build` e gravado no resultado do build (`.next/routes-manifest.json`); o `next start` não o relê. Por isso o build precisa rodar com o `API_URL` de produção, e trocar `API_URL` exige um novo build. No Open Graph, `/media/...` vira URL absoluta pelo `metadataBase` (`SITE_URL`).
 
-As leituras públicas (notícias, editorias, patrocinadores, campanhas) ficam em cache por 60 segundos; alterações feitas no painel expiram o cache imediatamente. Em produção, o IP do visitante, que a API usa para limitar tentativas repetidas, vem do cabeçalho definido pelo proxy do provedor. `CLIENT_IP_HEADER` escolhe qual: `x-forwarded-for` (padrão; serve para a Vercel, que o sobrescreve com o IP real), `x-real-ip` (Railway) ou `cf-connecting-ip` (Render, ou Cloudflare na frente de qualquer provedor). Com o cabeçalho errado, todos os visitantes viram um só (e os logins errados de um bloqueiam todos) ou, se o proxy não define o cabeçalho, o próprio visitante o envia e escolhe o IP com que é contado. Valor que não parece um IP é ignorado, e a requisição segue sem limite por visitante, como quando o cabeçalho falta.
+As leituras públicas (notícias, editorias, patrocinadores, campanhas) ficam em cache por 60 segundos; alterações feitas no painel expiram o cache imediatamente. Em produção, o IP do visitante, que a API usa para limitar tentativas repetidas, vem do cabeçalho definido pelo proxy do provedor. `CLIENT_IP_HEADER` escolhe qual: `x-forwarded-for` (padrão; serve para a Vercel, que o sobrescreve com o IP real), `x-real-ip` (Railway) ou `cf-connecting-ip` (Railway com o proxy do Cloudflare, ou Render). O `cf-connecting-ip` só é aceito quando a conexão veio de um endereço do Cloudflare (`src/lib/cloudflare-ips.ts`); quem contorna o Cloudflare é contado pelo próprio IP. Com o cabeçalho errado, todos os visitantes viram um só (e os logins errados de um bloqueiam todos) ou, se o proxy não define o cabeçalho, o próprio visitante o envia e escolhe o IP com que é contado. Valor que não parece um IP é ignorado, e a requisição segue sem limite por visitante, como quando o cabeçalho falta.
 
 Portal: http://localhost:3000. Painel: http://localhost:3000/admin. Prepare o banco e o administrador seguindo o README do backend.
 
@@ -60,25 +60,49 @@ npm run build
 npm run start
 ```
 
-O `start` usa a porta de `PORT` (padrão 3000), que os provedores fora da Vercel informam. O build avisa quais dados de `src/lib/site.ts` ainda estão como `[PREENCHER: ...]`.
+O `start` usa a porta de `PORT` (padrão 3000), que o Railway informa. O build avisa quais dados de `src/lib/site.ts` ainda estão como `[PREENCHER: ...]`.
 
 A integração usa JWT em cookie HttpOnly, SameSite=Strict, Secure em produção. As mutações validam a origem da requisição. Produção requer HTTPS e SITE_URL correspondente à origem pública. Configure API_URL e SITE_URL no provedor de hospedagem antes do build e do início. Nenhum segredo deve ser colocado no código ou em variáveis NEXT_PUBLIC.
 
-## Deploy na Vercel
+## Deploy no Railway
 
-A API fica no Railway (veja o README do backend); o portal, na Vercel.
+O portal, a API e o PostgreSQL ficam num mesmo projeto do Railway, com os serviços `portal`, `api` e `Postgres`. O passo a passo completo está no `GUIA-DEPLOY.md`, na pasta acima dos dois repositórios.
 
-- **Projeto:** a Vercel detecta o Next.js sozinha, e o build usa o script `build` do `package.json`. Deixe as funções na mesma região da API: Washington, D.C. (`iad1`), perto do Railway US East.
-- **Variáveis**, cadastradas só no ambiente *Production*:
-  - `API_URL`: endereço público da API com `/api`, ex.: `https://api.seudominio/api`. Precisa existir **já no build**, porque o rewrite de `/media` é gravado nele.
+- **Serviço:** o `railway.json` define o start (`npm run start`) e o health check (`/robots.txt`, estático: o deploy do portal não espera a API). Use a mesma região da API (US East).
+- **Variáveis do `portal`:**
+  - `API_URL=http://${{api.RAILWAY_PRIVATE_DOMAIN}}:${{api.PORT}}/api`: a API só existe na rede privada, sem endereço público.
+    - Durante o build a rede privada não responde: o sitemap, o feed e as páginas institucionais saem do build sem dados da API e se refazem em até 1 minuto no ar.
+    - O rewrite de `/media` é gravado no build com esse endereço. Se mudar, faça redeploy.
   - `SITE_URL`: domínio HTTPS público, sem barra no fim.
-  - `INTERNAL_API_KEY`: o mesmo valor do backend. Em produção, a API recusa (403) qualquer chamada sem ela.
-  - `CLIENT_IP_HEADER`: opcional; o padrão (`x-forwarded-for`) serve para a Vercel.
+  - `INTERNAL_API_KEY=${{api.INTERNAL_API_KEY}}`: a referência garante o mesmo valor da API, que recusa (403) qualquer chamada sem ela.
+  - `CLIENT_IP_HEADER=cf-connecting-ip` com o proxy do Cloudflare; `x-real-ip` sem ele.
+  - `NEXT_PUBLIC_GA_ID`: opcional, só em produção. Entra no build: mudou, faça redeploy.
   - `GOOGLE_SITE_VERIFICATION`: opcional.
-- **Previews:** sem essas variáveis, os previews não falam com a API de produção e o `robots.txt` bloqueia a indexação. É o comportamento desejado.
-- **Plano:** o plano Hobby da Vercel não permite uso comercial, e anúncios contam como uso comercial. O portal precisa do plano Pro.
-- **Upload:** a Vercel aceita até 4,5 MB no corpo de uma requisição a uma função, e o envio de imagens do painel passa por uma (`/api/admin/media`). Por isso o limite é de 4 MB por imagem, no painel e na API.
+- **Domínio:** o Railway exige CNAME, e o DNS do registro.br não aceita CNAME no domínio raiz. Por isso o DNS fica no Cloudflare:
+  - no Railway, *Custom Domain* com o domínio raiz;
+  - no Cloudflare, `CNAME @` com o proxy ligado (nuvem laranja) e o TXT de verificação, e SSL/TLS em **Full**, não *Full (strict)*.
+  - **Não** deixe domínio `*.up.railway.app` no portal: ele contorna o Cloudflare.
+- **Upload:** até 4 MB por imagem, no painel e na API.
 - **Antes de lançar:** preencha os campos `[PREENCHER: ...]` de `src/lib/site.ts` (razão social, CNPJ, endereço, jornalista responsável e e-mails). Eles aparecem no Expediente, no Contato, na Política de Privacidade e nos Termos, e o build lista os que faltam.
+
+**Outros provedores.** Na Vercel, `API_URL` é o endereço **público** da API, o `CLIENT_IP_HEADER` padrão serve, e o plano precisa ser o Pro: o Hobby não permite uso comercial, e anúncios contam como uso comercial. O corpo de uma requisição lá tem no máximo 4,5 MB, o que o limite de 4 MB por imagem já respeita.
+
+## Google Analytics e cookies
+
+- **`NEXT_PUBLIC_GA_ID`** (`G-XXXXXXXXXX`): só nas variáveis de produção. Entra no build: se mudar, faça redeploy. Sem ele, como no ambiente local, não há banner nem nada do Google.
+- **Consentimento (LGPD):**
+  - nada do Google carrega antes de "Aceitar" no banner;
+  - a escolha fica no cookie `consentimento_cookies` (`aceito` ou `recusado`) por 180 dias;
+  - "Recusar" depois de aceitar apaga `_ga` e `_ga_*` e recarrega a página sem o GA;
+  - "Preferências de cookies", no rodapé, reabre a escolha;
+  - o banner fica no rodapé do portal e nunca aparece no painel.
+- **Configuração do GA:** Google Signals e personalização de anúncios desligados. As visualizações de página entre rotas vêm da medição otimizada do GA4 (eventos do histórico do navegador).
+- **Eventos** (`src/lib/analytics.ts`), sem dados pessoais:
+  - `ad_click`: clique no banner de uma campanha ativa, com `campaign_id`, `campaign_name`, `sponsor` e `slot`;
+  - `generate_lead`: pedido do `/anuncie` enviado com sucesso, com `interest`.
+- **Política de Privacidade:** com o ID configurado, `/privacidade#cookies` mostra os cookies do GA e o Google entre os provedores.
+
+O painel também guarda no `localStorage` uma cópia do texto da matéria em edição até ela ser salva (`src/lib/article-drafts.ts`). Ela protege contra sessão expirada, recarregamento e Esc, vale 7 dias e é apagada ao sair.
 
 ## Estrutura
 

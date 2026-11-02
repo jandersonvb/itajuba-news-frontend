@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { alternates } from '@/lib/seo';
+import { GA_ID } from '@/lib/analytics';
 import { dayLabel, SITE } from '@/lib/site';
 import InfoPage from '@/components/InfoPage';
 import MailLink from '@/components/MailLink';
@@ -11,7 +12,11 @@ export const metadata: Metadata = {
   alternates: alternates('/privacidade'),
 };
 
+/** Listed only when the site has Google Analytics (NEXT_PUBLIC_GA_ID): without it, nothing goes to Google. */
+const GOOGLE = 'Google (EUA) — medição de audiência (Google Analytics), só com consentimento';
+
 export default function Privacy() {
+  const analytics = !!GA_ID;
   return (
     <InfoPage
       title="Política de Privacidade"
@@ -70,19 +75,42 @@ export default function Privacy() {
         hora e página acessada) para operar e proteger a infraestrutura.
       </p>
 
-      {/* Lists every cookie the site sets. Update this section if analytics, pixels or third-party ads are ever added. */}
-      <h2>Cookies</h2>
+      {/* Lists every cookie and browser storage the site uses. Update it whenever a cookie, pixel or third-party ad is added. */}
+      <h2 id="cookies">Cookies</h2>
       <p>
-        O portal público não usa cookies de rastreamento nem de publicidade de terceiros. Só o painel da redação usa
-        cookies:
+        {analytics
+          ? 'O portal usa cookies necessários ao funcionamento e, só se você aceitar, cookies de medição de audiência do Google Analytics.'
+          : 'O portal público não usa cookies de rastreamento nem de publicidade de terceiros. Só o painel da redação usa cookies.'}
       </p>
-      <ul>
-        <li>
-          <strong>sessão do painel:</strong> mantém a pessoa da equipe conectada. É estritamente necessário e expira
-          junto com o login;
-        </li>
-        <li><strong>tema do painel:</strong> lembra se o painel está no modo claro ou escuro.</li>
-      </ul>
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr><th scope="col">Cookie</th><th scope="col">Para quê</th><th scope="col">Tipo</th><th scope="col">Validade</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Sessão do painel</td><td>Manter conectada a pessoa da equipe</td><td>Necessário</td><td>12 horas</td></tr>
+            <tr><td>Tema do painel</td><td>Lembrar o tema claro ou escuro do painel</td><td>Necessário</td><td>1 ano</td></tr>
+            {analytics && <>
+              <tr><td><code>consentimento_cookies</code></td><td>Guardar a sua escolha sobre cookies</td><td>Necessário</td><td>180 dias</td></tr>
+              <tr><td><code>_ga</code>, <code>_ga_&lt;ID&gt;</code> (Google Analytics)</td><td>Medir a audiência: páginas vistas, origem da visita, dispositivo e cidade aproximada</td><td>Só com consentimento</td><td>Até 2 anos</td></tr>
+            </>}
+          </tbody>
+        </table>
+      </div>
+      {analytics && <>
+        <p>
+          <strong>Google Analytics:</strong> os cookies de medição só são ativados depois que você clica em “Aceitar” no
+          aviso de cookies. <strong>Base legal:</strong> consentimento (LGPD, art. 7º, I). O Google Analytics 4 não
+          guarda o endereço IP completo, e os dados vão para o Google, nos Estados Unidos (transferência internacional,
+          LGPD, art. 33). Não usamos o Google Analytics para publicidade personalizada.
+        </p>
+        <p>Você pode mudar a sua escolha a qualquer momento em “Preferências de cookies”, no rodapé do portal.</p>
+      </>}
+      <p>
+        Ao escrever uma matéria, o painel da redação guarda no próprio navegador (armazenamento local, não um cookie) uma
+        cópia do texto até ele ser salvo ou descartado, para que não se perca se a sessão expirar. Essa cópia não é
+        enviada a ninguém e é apagada ao sair do painel ou depois de 7 dias.
+      </p>
 
       <h2>Compartilhamento</h2>
       <p>
@@ -90,7 +118,7 @@ export default function Privacy() {
         em nosso nome:
       </p>
       <ul>
-        {SITE.processors.map((processor) => <li key={processor}>{processor}</li>)}
+        {[...SITE.processors, ...(analytics ? [GOOGLE] : [])].map((processor) => <li key={processor}>{processor}</li>)}
       </ul>
       <p>
         Como esses provedores ficam fora do Brasil, no país indicado ao lado de cada um, há transferência internacional

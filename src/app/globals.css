@@ -541,6 +541,47 @@ a.partner:hover { filter: none; opacity: 1; }
 .info-content a { color: var(--red-text); text-decoration: underline; text-underline-offset: 0.15em; overflow-wrap: anywhere; }
 .info-content a:hover { text-decoration-thickness: 2px; }
 .info-content .updated { margin-top: 2em; color: var(--muted); font-size: 0.9375rem; }
+/* Tables of the institutional pages (the cookies of /privacidade). */
+.table-scroll { overflow-x: auto; margin-block: 1.25em; }
+.info-content table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 0.9375rem; line-height: 1.5; }
+.info-content th,
+.info-content td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.info-content th { border-bottom-color: var(--line-strong); color: var(--ink); font-weight: 700; }
+.info-content code { font-size: 0.875em; overflow-wrap: anywhere; }
+
+/* Footer entry that reopens the cookie banner, styled as the links next to it. */
+.footer-link-button { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.footer-link-button:hover { color: #fff; }
+
+/* Cookie banner (CookieConsent.tsx): a strip at the bottom that never covers the whole page. */
+.cookie-consent {
+  position: fixed;
+  z-index: 90;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  width: min(960px, calc(100% - 24px));
+  padding: 16px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  transform: translateX(-50%);
+}
+.cookie-consent p { flex: 1 1 360px; margin: 0; }
+.cookie-consent a { color: var(--red-text); text-decoration: underline; text-underline-offset: 0.15em; }
+.cookie-consent-actions { display: flex; flex: 0 0 auto; gap: 10px; }
+.cookie-consent-actions .btn { min-width: 120px; }
+@media (max-width: 520px) {
+  .cookie-consent-actions { flex: 1 1 100%; }
+  .cookie-consent-actions .btn { flex: 1; }
+}
 
 /* Advertise */
 

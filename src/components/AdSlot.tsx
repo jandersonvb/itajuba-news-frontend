@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Campaign } from '@/lib/api';
+import AdLink from './AdLink';
 
 /** Active campaign of the slot, or an invitation to advertise there. */
 export default function AdSlot({ campaigns, slot }: { campaigns: Campaign[]; slot: 'leaderboard' | 'sidebar' }) {
@@ -8,9 +9,9 @@ export default function AdSlot({ campaigns, slot }: { campaigns: Campaign[]; slo
     return (
       <div className={'campaign ' + slot}>
         <span className="eyebrow">Publicidade · {ad.sponsor?.name}</span>
-        <a href={ad.targetUrl} target="_blank" rel="sponsored noopener noreferrer">
+        <AdLink ad={ad} slot={slot}>
           <img src={ad.imageUrl} alt={'Publicidade: ' + (ad.sponsor?.name || ad.name)} loading="lazy" decoding="async"/>
-        </a>
+        </AdLink>
       </div>
     );
   }

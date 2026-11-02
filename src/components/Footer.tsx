@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { GA_ID } from '@/lib/analytics';
+import CookieConsent from './CookieConsent';
+import CookiePreferencesButton from './CookiePreferencesButton';
 
 export default function Footer() {
   return (
@@ -20,7 +23,8 @@ export default function Footer() {
             <h4>Fale com o portal</h4>
             <ul className="footer-links">
               <li><Link href="/contato">Contato</Link></li>
-              <li><Link href="/admin">Área da redação ↗</Link></li>
+              {/* A full page load: a Google Analytics loaded on the portal never carries over into the admin. */}
+              <li><a href="/admin">Área da redação ↗</a></li>
             </ul>
           </div>
           <div>
@@ -30,6 +34,7 @@ export default function Footer() {
               <li><Link href="/contato">Contato</Link></li>
               <li><Link href="/privacidade">Privacidade</Link></li>
               <li><Link href="/termos">Termos de uso</Link></li>
+              {GA_ID && <li><CookiePreferencesButton/></li>}
             </ul>
           </div>
         </div>
@@ -38,6 +43,7 @@ export default function Footer() {
           <span>Jornalismo local. Conexões que importam.</span>
         </div>
       </div>
+      {GA_ID && <CookieConsent gaId={GA_ID}/>}
     </footer>
   );
 }

@@ -169,11 +169,13 @@ type DrawerProps = {
   onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void;
   onInput?: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
+  /** The <form>, for code that reads the fields outside an event (e.g. the article draft on pagehide). */
+  formRef?: React.Ref<HTMLFormElement>;
   children: React.ReactNode;
 };
 
 /** Form in a modal panel that slides in from the right. Esc, the X and Cancelar close it. */
-export function Drawer({ title, description, wide, submitLabel, busy, error, onSubmit, onInput, onClose, children }: DrawerProps) {
+export function Drawer({ title, description, wide, submitLabel, busy, error, onSubmit, onInput, onClose, formRef, children }: DrawerProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -185,7 +187,7 @@ export function Drawer({ title, description, wide, submitLabel, busy, error, onS
 
   return (
     <dialog ref={dialog} className={'adm-drawer' + (wide ? ' wide' : '')} onClose={onClose} aria-labelledby={titleId}>
-      <form onSubmit={onSubmit} onInput={onInput}>
+      <form ref={formRef} onSubmit={onSubmit} onInput={onInput}>
         <header className="adm-drawer-head">
           <div>
             <h2 id={titleId}>{title}</h2>
