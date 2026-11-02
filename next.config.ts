@@ -15,6 +15,9 @@ if (process.env.NODE_ENV === 'production' && !process.env.SITE_INFO_CHECKED) {
 
 const config: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    agentUpgrade: 'security',
+  },
   async headers() {
     return [
       {
