@@ -5,11 +5,14 @@ import { clientIp, proxy, sameOrigin } from '@/lib/proxy';
 import { SESSION_COOKIE } from '@/lib/session';
 
 /** Same limit as the API. */
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
-/** The file plus the multipart envelope (boundary, part headers, file name). */
+const MAX_FILE_BYTES = 4 * 1024 * 1024;
+/**
+ * The file plus the multipart envelope (boundary, part headers, file name): 4.5 MB, the most
+ * Vercel accepts in the body of a request to a function.
+ */
 const MAX_BODY_BYTES = MAX_FILE_BYTES + 512 * 1024;
 
-const tooLarge = () => NextResponse.json({ message: 'Imagem maior que 5 MB' }, { status: 413 });
+const tooLarge = () => NextResponse.json({ message: 'Imagem maior que 4 MB' }, { status: 413 });
 
 // This static route takes precedence over [resource], so it also serves the listing.
 export function GET(req: NextRequest) {

@@ -1,4 +1,6 @@
+import {cookies} from 'next/headers';
 import {redirect} from 'next/navigation';
+import {parseTheme,THEME_COOKIE} from '@/lib/admin-client';
 import {api,Category} from '@/lib/api';
 import {canAccess} from '@/lib/permissions';
 import {getSession,SESSION_EXPIRED_PATH} from '@/lib/session';
@@ -18,5 +20,6 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
   // A tab the role cannot open (e.g. ?aba=users for a reporter) falls back to Notícias.
   if (aba && !canAccess(session.me.role, aba)) redirect('/admin');
   const categories = await api<Category[]>('/categories');
-  return <Dashboard categories={categories} me={session.me} initialTab={aba && canAccess(session.me.role, aba) ? aba : 'articles'}/>;
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+  return <Dashboard categories={categories} me={session.me} initialTab={aba && canAccess(session.me.role, aba) ? aba : 'articles'} initialTheme={theme}/>;
 }

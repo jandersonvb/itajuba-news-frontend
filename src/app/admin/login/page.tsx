@@ -1,69 +1,46 @@
-'use client';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import Alert from '@/components/Alert';
+import LoginBrand from '@/components/LoginBrand';
+import LoginForm from '@/components/LoginForm';
+import ResendSetupInvite from '@/components/ResendSetupInvite';
+import { setupStatus } from '@/lib/setup';
 
-export default function Login() {
-  const router = useRouter();
-  const [status, setStatus] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [expired, setExpired] = useState(false);
-
-  // Read after mount: useSearchParams would need a Suspense boundary on this prerendered page.
-  useEffect(() => {
-    setExpired(new URLSearchParams(window.location.search).get('sessao') === 'expirada');
-  }, []);
-
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setBusy(true);
-    setStatus('');
-    const data = new FormData(e.currentTarget);
-    try {
-      const r = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: data.get('email'), password: data.get('password') }) });
-      if (r.ok) {
-        router.replace('/admin');
-        router.refresh();
-      } else {
-        const body = await r.json().catch(() => null);
-        setStatus(body?.message || 'Não foi possível entrar.');
-      }
-    } catch {
-      setStatus('Não foi possível conectar.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
+/**
+ * Login of the panel. During the first setup nobody can sign in yet, so the page explains the
+ * next step instead: accept the invitation sent to ADMIN_EMAIL, or configure ADMIN_EMAIL.
+ * ?sessao=expirada and ?senha=redefinida add a message to the login.
+ */
+export default async function Login({ searchParams }: { searchParams: Promise<{ sessao?: string; senha?: string }> }) {
+  const [{ sessao, senha }, setup] = await Promise.all([searchParams, setupStatus()]);
   return (
     <main className="login">
-      <section className="login-brand" aria-label="Itajubá News">
-        <Link href="/" className="wordmark">Itajubá <span>NEWS</span></Link>
-        <div>
-          <span className="eyebrow">Área da redação</span>
-          <h1>A cidade acontece aqui. A notícia começa por você.</h1>
-          <p>Publique matérias, organize as editorias e cuide dos patrocinadores do portal.</p>
-        </div>
-        <div className="login-dots" aria-hidden="true"><span/><span/><span/><span/></div>
-      </section>
+      <LoginBrand/>
       <section className="login-panel">
         <div className="login-card">
-          <h2>Entrar no painel</h2>
-          <p className="subtitle">Use o e-mail e a senha da sua conta da redação.</p>
-          {expired && !status && <p className="notice" role="status">Sua sessão expirou ou foi encerrada. Entre novamente.</p>}
-          <form className="editor-form" onSubmit={submit}>
-            <label>E-mail<input type="email" name="email" autoComplete="username" required autoFocus/></label>
-            <div>
-              <label htmlFor="login-password">Senha</label>
-              <span className="password-field">
-                <input id="login-password" type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" required minLength={12}/>
-                <button type="button" className="password-toggle" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>{showPassword ? 'Ocultar' : 'Mostrar'}</button>
-              </span>
-            </div>
-            {status && <p className="form-error" role="alert">{status}</p>}
-            <button className="btn login-submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
-          </form>
+          {setup?.state === 'invited' ? (
+            <>
+              <span className="login-step">Configuração inicial</span>
+              <h2>Convite enviado</h2>
+              <p className="subtitle">Enviamos um convite de administrador para <b>{setup.email}</b>. Abra o e-mail e use o botão “Criar minha senha” para entrar no painel. O link vale por 7 dias.</p>
+              <p className="subtitle login-note">Não chegou? Confira a caixa de spam ou peça um novo.</p>
+              <ResendSetupInvite/>
+            </>
+          ) : setup?.state === 'unconfigured' ? (
+            <>
+              <span className="login-step">Configuração inicial</span>
+              <h2>Defina o administrador</h2>
+              <p className="subtitle">Este painel ainda não tem administrador. Quem cuida do servidor define o e-mail dele na variável <code>ADMIN_EMAIL</code> da API e a reinicia.</p>
+              <Alert tone="info" title="O que acontece depois">A API cria a conta e envia um convite para esse e-mail. A pessoa cria a própria senha pelo link e já entra no painel.</Alert>
+            </>
+          ) : (
+            <>
+              <h2>Entrar no painel</h2>
+              <p className="subtitle">Use o e-mail e a senha da sua conta da redação.</p>
+              {sessao === 'expirada' && <Alert tone="info" title="Sessão encerrada">Entre novamente para continuar de onde parou.</Alert>}
+              {senha === 'redefinida' && <Alert tone="success" title="Senha alterada">Entre com a nova senha.</Alert>}
+              <LoginForm/>
+            </>
+          )}
           <Link href="/" className="login-back">← Voltar ao portal</Link>
         </div>
       </section>

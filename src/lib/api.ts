@@ -1,5 +1,27 @@
 export type Category={id:string;name:string;slug:string;position:number};
-export type Article={id:string;title:string;slug:string;excerpt:string;content:string;categoryId:string;imageUrl:string;author:string;publishedAt:string|null;status:'draft'|'published';featured:boolean;demo:boolean;category:{id:string;name:string;slug:string}|null};
+export type Article = {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  content: string;
+  categoryId: string;
+  imageUrl: string;
+  author: string;
+  publishedAt: string | null;
+  /** Last change of title, excerpt, text or image. Equal to `publishedAt` until then. */
+  updatedAt: string;
+  status: 'draft' | 'published';
+  featured: boolean;
+  demo: boolean;
+  category: { id: string; name: string; slug: string } | null;
+};
+
+/** Page of `GET /articles`, 12 items per page. */
+export type ArticlePage = { items: Article[]; total: number; page: number };
+
+/** Item of `GET /sitemap`: every published article except the demo ones, newest first. */
+export type SitemapEntry = { slug: string; title: string; publishedAt: string; updatedAt: string };
 export type Sponsor={id:string;name:string;logoUrl:string;websiteUrl:string;active:boolean};
 export type Campaign={id:string;name:string;sponsorId:string;slot:'leaderboard'|'sidebar';imageUrl:string;targetUrl:string;startsAt:string;endsAt:string;active:boolean;sponsor?:Sponsor};
 
@@ -19,6 +41,12 @@ export type Me = { id: string; name: string; email: string; role: UserRole };
 export type StaffUser = Me & { active: boolean; createdAt: string };
 
 export const apiUrl = () => process.env.API_URL || 'http://localhost:4000/api';
+
+/** Public origin of the portal, without a trailing slash: the base of every absolute URL. */
+export const siteUrl = () => (process.env.SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
+
+/** Absolute form of a URL from the API: uploaded images come as `/media/<file>`. */
+export const absoluteUrl = (url: string) => (/^https?:\/\//.test(url) ? url : siteUrl() + url);
 
 /** Tag of the cached public reads. Successful admin mutations expire it (see proxy.ts). */
 export const PUBLIC_CACHE_TAG = 'portal';
@@ -49,3 +77,11 @@ export async function api<T>(path: string): Promise<T> {
 }
 
 export const dateLabel=(d:string|null)=>d?new Intl.DateTimeFormat('pt-BR',{dateStyle:'medium',timeZone:'America/Sao_Paulo'}).format(new Date(d)):'';
+
+/** Date and time in Itajubá, e.g. "11 de out. de 2026, 14:32". */
+export const dateTimeLabel = (d: string) =>
+  new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(d));
+
+/** True when the text or the image changed more than a minute after publication. */
+export const wasUpdated = (a: Pick<Article, 'publishedAt' | 'updatedAt'>) =>
+  !!a.publishedAt && new Date(a.updatedAt).getTime() - new Date(a.publishedAt).getTime() > 60_000;

@@ -10,7 +10,7 @@ export default function Partners({ sponsors }: { sponsors: PublicSponsor[] }) {
         <div className="partner-list">
           {sponsors.map((s) => (
             <a key={s.id} className="partner" href={s.websiteUrl} target="_blank" rel="sponsored noopener noreferrer">
-              {s.logoUrl ? <img className="partner-logo" src={s.logoUrl} alt={s.name}/> : s.name}
+              {s.logoUrl ? <img className="partner-logo" src={s.logoUrl} alt={s.name} loading="lazy" decoding="async"/> : s.name}
             </a>
           ))}
         </div>

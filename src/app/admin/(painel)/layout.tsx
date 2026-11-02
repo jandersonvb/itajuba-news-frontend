@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getSession, SESSION_EXPIRED_PATH } from '@/lib/session';
+import './admin.css';
 
 export const dynamic = 'force-dynamic';
 

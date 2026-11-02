@@ -6,7 +6,7 @@ export default function Footer() {
       <div className="wrap">
         <div className="footer-top">
           <div>
-            <Link href="/" className="wordmark">Itajubá <span>NEWS</span></Link>
+            <Link href="/" className="logo-dark"><img src="/logo-dark.png" alt="Itajubá News" width={400} height={220} loading="lazy" decoding="async"/></Link>
             <p>A cidade acontece aqui. Notícias, histórias e conexões do Sul de Minas.</p>
           </div>
           <div>
@@ -19,8 +19,17 @@ export default function Footer() {
           <div>
             <h4>Fale com o portal</h4>
             <ul className="footer-links">
-              <li><Link href="/anuncie">Formulário comercial</Link></li>
+              <li><Link href="/contato">Contato</Link></li>
               <li><Link href="/admin">Área da redação ↗</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4>Institucional</h4>
+            <ul className="footer-links">
+              <li><Link href="/expediente">Expediente</Link></li>
+              <li><Link href="/contato">Contato</Link></li>
+              <li><Link href="/privacidade">Privacidade</Link></li>
+              <li><Link href="/termos">Termos de uso</Link></li>
             </ul>
           </div>
         </div>

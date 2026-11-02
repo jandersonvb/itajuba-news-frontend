@@ -1,7 +1,6 @@
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { api, Category } from '@/lib/api';
-import NavLinks, { NavList } from './NavLinks';
+import NavLinks from './NavLinks';
 
 /** Menu sections, in the order set in the admin. Without the API the menu shows only "Início". */
 async function sections() {
@@ -38,9 +37,7 @@ export default async function Header() {
         <Link className="btn" href="/anuncie">Anuncie aqui <span aria-hidden="true">↗</span></Link>
       </header>
       <nav className="site-nav" aria-label="Editorias">
-        <Suspense fallback={<NavList items={items}/>}>
-          <NavLinks items={items}/>
-        </Suspense>
+        <NavLinks items={items}/>
       </nav>
     </>
   );

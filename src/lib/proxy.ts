@@ -10,13 +10,33 @@ export function sameOrigin(req: NextRequest) {
   return req.headers.get('origin') === (process.env.SITE_URL ? new URL(process.env.SITE_URL).origin : req.nextUrl.origin);
 }
 
+/** Header with the visitor IP, set by the hosting provider's proxy (see clientIp). */
+const IP_HEADER = (process.env.CLIENT_IP_HEADER || 'x-forwarded-for').trim().toLowerCase();
+/** IPv4 or IPv6: anything else in the header is ignored. */
+const IP_PATTERN = /^[0-9a-f.:]{1,64}$/i;
+
 /**
- * Visitor IP as recorded by the closest proxy: the last X-Forwarded-For entry. Next.js fills the
- * header from the socket only when it is absent, so in production run behind a proxy that
- * appends or overwrites it (Vercel, nginx, Cloudflare).
+ * Visitor IP, sent to the API as `x-client-ip` for the per-visitor rate limit. CLIENT_IP_HEADER
+ * names the header the provider's proxy sets:
+ *
+ * | Provider                            | CLIENT_IP_HEADER                                             |
+ * | ----------------------------------- | ------------------------------------------------------------ |
+ * | Vercel                              | x-forwarded-for (default; Vercel overwrites it) or x-real-ip |
+ * | Railway                             | x-real-ip                                                    |
+ * | Render                              | cf-connecting-ip                                             |
+ * | Cloudflare in front of any provider | cf-connecting-ip                                             |
+ *
+ * For x-forwarded-for, the last entry: the one recorded by the closest proxy. Next.js fills that
+ * header from the socket only when it is absent, so the proxy must append to it or overwrite it.
+ * Behind Cloudflare the last entry is Cloudflare's own address, and every visitor would share it.
+ * Any other header holds the visitor's address itself; if it is a list, the first entry.
+ * Null when the header is missing or does not look like an IP.
  */
 export function clientIp(req: NextRequest) {
-  return req.headers.get('x-forwarded-for')?.split(',').pop()?.trim() || null;
+  const entries = req.headers.get(IP_HEADER)?.split(',');
+  if (!entries) return null;
+  const ip = (IP_HEADER === 'x-forwarded-for' ? entries[entries.length - 1] : entries[0]).trim();
+  return IP_PATTERN.test(ip) ? ip : null;
 }
 
 export async function proxy(req: NextRequest, path: string, auth = true) {
