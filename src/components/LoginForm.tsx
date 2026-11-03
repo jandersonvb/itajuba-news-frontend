@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Alert from './Alert';
 import PasswordField from './PasswordField';
 import { offerToSavePassword } from '@/lib/browser-credentials';
+import { form, formInput, formLabel, loginSubmit } from '@/lib/styles';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -36,13 +37,13 @@ export default function LoginForm() {
   }
 
   return (
-    <form className="editor-form" onSubmit={submit}>
-      <label>E-mail<input type="email" name="email" autoComplete="username" required autoFocus/></label>
+    <form className={form} onSubmit={submit}>
+      <label className={formLabel}>E-mail<input className={formInput} type="email" name="email" autoComplete="username" required autoFocus/></label>
       <PasswordField id="login-password" label="Senha" name="password" autoComplete="current-password">
-        <Link href="/admin/esqueci-senha" className="login-forgot">Esqueci minha senha</Link>
+        <Link href="/admin/esqueci-senha" className="mt-2 ml-auto block w-fit text-14 font-semibold text-muted hover:text-ink hover:underline">Esqueci minha senha</Link>
       </PasswordField>
-      {status && <Alert tone="error">{status}</Alert>}
-      <button className="btn login-submit" disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
+      {status && <Alert tone="error" spaced={false}>{status}</Alert>}
+      <button className={loginSubmit} disabled={busy}>{busy ? 'Entrando…' : 'Entrar'}</button>
     </form>
   );
 }

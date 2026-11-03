@@ -5,7 +5,8 @@ import { FEED_TYPES, OPEN_GRAPH, SITE_DESCRIPTION } from '@/lib/seo';
 import './globals.css';
 
 // One family for headlines, text and interface, as on jovempan.com.br. Variable: weights 200–800.
-const sans = Manrope({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+// Exposed as --font-manrope; globals.css builds Tailwind's --font-sans on it.
+const sans = Manrope({ subsets: ['latin'], variable: '--font-manrope', display: 'swap' });
 
 const googleVerification = process.env.GOOGLE_SITE_VERIFICATION;
 

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Script from 'next/script';
 import { clearAnalyticsCookies, type Consent, onCookiePreferences, readConsent, writeConsent } from '@/lib/consent';
+import { button, cx } from '@/lib/styles';
 
 /**
  * Cookie banner and the Google Analytics loader. Nothing from Google loads before "Aceitar", and
@@ -33,6 +34,8 @@ export default function CookieConsent({ gaId }: { gaId: string }) {
     }
   }
 
+  const choice = cx(button(), 'min-w-[120px] max-xs:flex-1');
+
   return (
     <>
       {consent === 'aceito' && (
@@ -45,14 +48,19 @@ export default function CookieConsent({ gaId }: { gaId: string }) {
         </>
       )}
       {open && (
-        <div className="cookie-consent" role="region" aria-label="Consentimento de cookies">
-          <p>
+        // A strip at the bottom that never covers the whole page.
+        <div
+          className="fixed bottom-[calc(12px+env(safe-area-inset-bottom))] left-1/2 z-90 flex w-[min(960px,calc(100%-24px))] -translate-x-1/2 flex-wrap items-center gap-x-5 gap-y-3 rounded-md border border-line-strong bg-white px-5 py-4 text-15 leading-[1.5] text-ink shadow-card"
+          role="region"
+          aria-label="Consentimento de cookies"
+        >
+          <p className="m-0 flex-[1_1_360px]">
             Usamos cookies do Google Analytics para saber quantas pessoas leem o portal e quais matérias interessam mais.
-            Eles só são ativados se você aceitar. <Link href="/privacidade#cookies">Saiba mais</Link>
+            Eles só são ativados se você aceitar. <Link href="/privacidade#cookies" className="text-red-text underline underline-offset-[0.15em]">Saiba mais</Link>
           </p>
-          <div className="cookie-consent-actions">
-            <button type="button" className="btn" onClick={() => choose('recusado')}>Recusar</button>
-            <button type="button" className="btn" onClick={() => choose('aceito')}>Aceitar</button>
+          <div className="flex flex-none gap-2.5 max-xs:flex-[1_1_100%]">
+            <button type="button" className={choice} onClick={() => choose('recusado')}>Recusar</button>
+            <button type="button" className={choice} onClick={() => choose('aceito')}>Aceitar</button>
           </div>
         </div>
       )}

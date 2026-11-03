@@ -104,11 +104,44 @@ O portal, a API e o PostgreSQL ficam num mesmo projeto do Railway, com os servi�
 
 O painel também guarda no `localStorage` uma cópia do texto da matéria em edição até ela ser salva (`src/lib/article-drafts.ts`). Ela protege contra sessão expirada, recarregamento e Esc, vale 7 dias e é apagada ao sair.
 
+## Estilos (Tailwind CSS v4)
+
+O visual é todo feito com classes do Tailwind nos componentes.
+
+- `src/app/globals.css` guarda só:
+  - os tokens do design (`@theme`): cores do portal e do painel, fonte, escala de texto, sombras e animações;
+  - os estilos-base dos elementos;
+  - o utilitário `wrap`, que é a coluna da página.
+- As cores do painel usam `light-dark()`, então o tema claro, escuro ou automático só troca o `color-scheme`.
+- A escala de texto tem o nome do tamanho em pixels (`text-13`, `text-15`) e não define altura de linha.
+- Os breakpoints são os do layout original e quase sempre aparecem como `max-*`:
+
+  | Variante | Largura |
+  |---|---|
+  | `max-sm` | até 600px |
+  | `max-md` | até 760px |
+  | `max-lg` | até 960px |
+  | `max-xl` | até 1100px |
+
+- `src/lib/styles.ts` tem as classes compartilhadas: botões, campos, rótulos e avisos do portal e do painel.
+  - As variantes são escolhidas por argumento, como `button('light')` ou `admButton('primary')`.
+  - Não acrescente depois uma classe que conflite com elas: com duas classes da mesma propriedade, vale a ordem do CSS, não a da `className`.
+
+Nenhum controle usa a aparência do sistema operacional:
+
+- **`src/components/Select.tsx`:** o select do portal, da busca e do painel.
+  - É uma lista acessível pelo teclado (setas, Home/End, Enter, Esc e busca pelas primeiras letras).
+  - Um `<select>` nativo escondido carrega o valor, então `FormData`, `required` e `form.reset()` continuam funcionando.
+- **`src/components/admin/DateTimeField.tsx`:** data e hora das campanhas, com calendário e campo `hh:mm`.
+  - Envia `AAAA-MM-DDTHH:mm` no horário de Brasília.
+- **`src/components/admin/ConfirmDialog.tsx`:** substitui o `window.confirm()` do painel. Abre com o foco em "Cancelar", e Esc cancela.
+- **Checkbox, radio e interruptor:** desenhados com `appearance-none`.
+
 ## Estrutura
 
 - `src/app/`: páginas públicas, painel e rotas intermediárias para API.
 - `src/components/`: componentes, formulários e painel.
-- `src/lib/`: tipos e integração com NestJS.
+- `src/lib/`: tipos, integração com NestJS e as classes compartilhadas (`styles.ts`).
 - `public/logo.png`: logo original.
 - `.github/workflows/ci.yml`: TypeScript e build.
 
@@ -118,4 +151,12 @@ Base inicial para um portal por instalação; não há cobrança, métricas de b
 
 Fotos externas são ilustrativas ou fornecidas pela redação. Matérias usam texto simples, evitando HTML arbitrário. Formulário comercial grava dados no backend com consentimento, e a API avisa os administradores por e-mail. Dados podem ser excluídos pela equipe no painel.
 
-Build e verificação TypeScript executados. As rotas intermediárias do painel (editorias, mídia, patrocinadores) e o rewrite de `/media` foram conferidos contra a API local. Os testes de API ficam no repositório backend. Não houve inspeção visual em navegador nesta entrega.
+Build e verificação TypeScript executados. Os testes de API ficam no repositório backend.
+
+Em 03/11/2026, todos os fluxos foram testados num Chrome real, partindo de um banco vazio:
+- configuração inicial, convites, login, senha esquecida e sessão expirada;
+- as 7 abas do painel com os perfis Administrador, Editor e Repórter;
+- o portal, a busca, o Anuncie, os feeds e os cookies;
+- os componentes acima, com mouse e teclado.
+
+A migração para o Tailwind foi comparada pixel a pixel com o CSS anterior, em 64 telas de desktop e celular.

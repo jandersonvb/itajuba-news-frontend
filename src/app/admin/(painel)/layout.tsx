@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { getSession, SESSION_EXPIRED_PATH } from '@/lib/session';
-import './admin.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +9,11 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   if (session.status === 'anonymous') redirect('/admin/login');
   if (session.status === 'expired') redirect(SESSION_EXPIRED_PATH);
   if (session.status === 'unavailable')
-    return <main className="wrap article-page"><h1>API indisponível.</h1><p>Confira o backend e tente novamente.</p></main>;
+    return (
+      <main className="wrap py-16">
+        <h1 className="text-[clamp(1.875rem,1.2rem+2.8vw,3.25rem)]">API indisponível.</h1>
+        <p className="mt-3">Confira o backend e tente novamente.</p>
+      </main>
+    );
   return children;
 }

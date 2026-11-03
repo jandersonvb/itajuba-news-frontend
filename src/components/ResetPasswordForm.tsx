@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Alert from './Alert';
 import PasswordField from './PasswordField';
+import { form, loginSubmit, subtitle } from '@/lib/styles';
 
 /**
  * New-password form of the e-mailed link. The API has no way to check a token without using it,
@@ -47,12 +48,12 @@ export default function ResetPasswordForm({ token }: { token: string }) {
 
   return (
     <>
-      <p className="subtitle">Escolha uma senha com pelo menos 12 caracteres. Ao salvar, as sessões abertas da sua conta serão encerradas.</p>
-      <form className="editor-form" onSubmit={submit}>
+      <p className={subtitle}>Escolha uma senha com pelo menos 12 caracteres. Ao salvar, as sessões abertas da sua conta serão encerradas.</p>
+      <form className={form} onSubmit={submit}>
         <PasswordField id="new-password" label="Nova senha" name="password" autoComplete="new-password" autoFocus/>
         <PasswordField id="new-password-confirmation" label="Confirme a nova senha" name="confirmation" autoComplete="new-password"/>
-        {status && <Alert tone="error">{status}</Alert>}
-        <button className="btn login-submit" disabled={busy}>{busy ? 'Salvando…' : 'Salvar nova senha'}</button>
+        {status && <Alert tone="error" spaced={false}>{status}</Alert>}
+        <button className={loginSubmit} disabled={busy}>{busy ? 'Salvando…' : 'Salvar nova senha'}</button>
       </form>
     </>
   );

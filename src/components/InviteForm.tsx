@@ -6,6 +6,7 @@ import { roleNames } from '@/lib/permissions';
 import { offerToSavePassword } from '@/lib/browser-credentials';
 import Alert from './Alert';
 import PasswordField from './PasswordField';
+import { form, formInput, formLabel, loginSubmit, subtitle } from '@/lib/styles';
 
 export type Invite = { name: string; email: string; role: UserRole };
 
@@ -50,14 +51,14 @@ export default function InviteForm({ token, invite }: { token: string; invite: I
 
   return (
     <>
-      <p className="subtitle">Você recebeu um convite para a redação do Itajubá News como <b>{roleNames[invite.role].replace(/ \(.*\)$/, '')}</b>. Escolha uma senha para entrar no painel.</p>
-      <form className="editor-form" onSubmit={submit}>
-        <label>Seu nome<input name="name" defaultValue={invite.name} autoComplete="name" required minLength={2} maxLength={100} autoFocus={!invite.name}/></label>
-        <label>E-mail<input type="email" name="email" value={invite.email} readOnly autoComplete="username"/></label>
+      <p className={subtitle}>Você recebeu um convite para a redação do Itajubá News como <b>{roleNames[invite.role].replace(/ \(.*\)$/, '')}</b>. Escolha uma senha para entrar no painel.</p>
+      <form className={form} onSubmit={submit}>
+        <label className={formLabel}>Seu nome<input className={formInput} name="name" defaultValue={invite.name} autoComplete="name" required minLength={2} maxLength={100} autoFocus={!invite.name}/></label>
+        <label className={formLabel}>E-mail<input className={formInput} type="email" name="email" value={invite.email} readOnly autoComplete="username"/></label>
         <PasswordField id="invite-password" label="Senha (mínimo 12 caracteres)" name="password" autoComplete="new-password" autoFocus={!!invite.name}/>
         <PasswordField id="invite-confirmation" label="Confirme a senha" name="confirmation" autoComplete="new-password"/>
-        {status && <Alert tone="error">{status}</Alert>}
-        <button className="btn login-submit" disabled={busy}>{busy ? 'Entrando…' : 'Criar senha e entrar'}</button>
+        {status && <Alert tone="error" spaced={false}>{status}</Alert>}
+        <button className={loginSubmit} disabled={busy}>{busy ? 'Entrando…' : 'Criar senha e entrar'}</button>
       </form>
     </>
   );

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Alert from '@/components/Alert';
 import LoginBrand from '@/components/LoginBrand';
+import { button, form, formInput, formLabel, loginBack, loginSubmit, loginTitle, subtitle } from '@/lib/styles';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -33,26 +34,26 @@ export default function ForgotPassword() {
   }
 
   return (
-    <main className="login">
+    <main className="grid min-h-dvh grid-cols-2 max-lg:grid-cols-1">
       <LoginBrand/>
-      <section className="login-panel">
-        <div className="login-card">
-          <h2>Esqueci minha senha</h2>
-          <p className="subtitle">Informe o e-mail da sua conta da redação. Enviaremos um link para você criar uma nova senha.</p>
+      <section className="flex items-center justify-center px-(--gutter) py-[clamp(32px,5vw,64px)] max-lg:items-start">
+        <div className="w-full max-w-[400px]">
+          <h2 className={loginTitle}>Esqueci minha senha</h2>
+          <p className={subtitle}>Informe o e-mail da sua conta da redação. Enviaremos um link para você criar uma nova senha.</p>
           {sent ? (
-            <div className="login-sent">
+            <div className="mt-[22px] grid justify-items-start gap-4">
               {/* Same message whether or not the e-mail has an account. */}
-              <Alert tone="success" title="Verifique seu e-mail">Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha. Ele vale por 30 minutos; confira também a caixa de spam.</Alert>
-              <button type="button" className="btn light" onClick={() => setSent(false)}>Enviar de novo</button>
+              <Alert tone="success" title="Verifique seu e-mail" spaced={false} className="justify-self-stretch">Se existir uma conta com esse e-mail, enviamos um link para redefinir a senha. Ele vale por 30 minutos; confira também a caixa de spam.</Alert>
+              <button type="button" className={button('light')} onClick={() => setSent(false)}>Enviar de novo</button>
             </div>
           ) : (
-            <form className="editor-form" onSubmit={submit}>
-              <label>E-mail<input type="email" name="email" autoComplete="username" required autoFocus defaultValue={email}/></label>
-              {status && <Alert tone="error">{status}</Alert>}
-              <button className="btn login-submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar link'}</button>
+            <form className={form} onSubmit={submit}>
+              <label className={formLabel}>E-mail<input className={formInput} type="email" name="email" autoComplete="username" required autoFocus defaultValue={email}/></label>
+              {status && <Alert tone="error" spaced={false}>{status}</Alert>}
+              <button className={loginSubmit} disabled={busy}>{busy ? 'Enviando…' : 'Enviar link'}</button>
             </form>
           )}
-          <Link href="/admin/login" className="login-back">← Voltar ao login</Link>
+          <Link href="/admin/login" className={loginBack}>← Voltar ao login</Link>
         </div>
       </section>
     </main>

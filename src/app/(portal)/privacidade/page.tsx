@@ -82,7 +82,7 @@ export default function Privacy() {
           ? 'O portal usa cookies necessários ao funcionamento e, só se você aceitar, cookies de medição de audiência do Google Analytics.'
           : 'O portal público não usa cookies de rastreamento nem de publicidade de terceiros. Só o painel da redação usa cookies.'}
       </p>
-      <div className="table-scroll">
+      <div className="my-[1.25em] overflow-x-auto">
         <table>
           <thead>
             <tr><th scope="col">Cookie</th><th scope="col">Para quê</th><th scope="col">Tipo</th><th scope="col">Validade</th></tr>
@@ -156,7 +156,7 @@ export default function Privacy() {
         Esta política pode mudar para acompanhar novos recursos do portal ou mudanças na lei. A versão em vigor fica
         sempre nesta página.
       </p>
-      <p className="updated">Última atualização: <time dateTime={SITE.privacyUpdatedAt}>{dayLabel(SITE.privacyUpdatedAt)}</time>.</p>
+      <p className="mt-[2em]! text-15 text-muted">Última atualização: <time dateTime={SITE.privacyUpdatedAt}>{dayLabel(SITE.privacyUpdatedAt)}</time>.</p>
     </InfoPage>
   );
 }

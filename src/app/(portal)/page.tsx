@@ -8,6 +8,7 @@ import JsonLd from '@/components/JsonLd';
 import NewsIndex, { Unavailable } from '@/components/NewsIndex';
 import NewsList, { categoryLabel } from '@/components/NewsList';
 import Pagination from '@/components/Pagination';
+import { categoryTag, cx, eyebrow, meta, sectionHeading } from '@/lib/styles';
 
 /**
  * New address of the old listing URLs, still found in shared links: `/?editoria=x` became
@@ -47,30 +48,36 @@ const structuredData = () => [
   { '@context': 'https://schema.org', ...publisherLd() },
 ];
 
-/** Main story with up to two more beside it. */
+/** Story on a photo, with a dark gradient under the text. */
+const story = "group relative isolate block overflow-hidden rounded-md bg-coal text-white after:absolute after:inset-0 after:bg-[linear-gradient(180deg,rgb(0_0_0/0)_25%,rgb(0_0_0/0.5)_55%,rgb(0_0_0/0.88))] after:content-['']";
+const storyImage = 'absolute inset-0 size-full object-cover transition-transform duration-700 ease-soft group-hover:scale-[1.04]';
+const storyCopy = 'absolute inset-x-0 bottom-0 z-1 p-[clamp(18px,2.4vw,32px)]';
+const storyTitle = 'underline decoration-transparent decoration-2 underline-offset-[5px] transition-[text-decoration-color] duration-200 group-hover:decoration-white/70';
+
+/** Main story with up to two more beside it (beside on desktop, below on tablets and phones). */
 function Featured({ hero, sides }: { hero: Article; sides: Article[] }) {
   return (
     <>
-      <div className="section-heading"><h2>Itajubá em destaque</h2><span className="eyebrow">O que move a nossa cidade</span></div>
-      <section className={'hero-grid' + (sides.length ? '' : ' solo')}>
-        <Link className="story hero-main" href={'/noticias/' + hero.slug}>
-          {hero.imageUrl && <img src={hero.imageUrl} alt="" fetchPriority="high"/>}
-          <div className="story-copy">
-            <span className="category">{categoryLabel(hero)}</span>
-            <h1>{hero.title}</h1>
-            <p>{hero.excerpt}</p>
-            <div className="meta">{hero.author} · {dateLabel(hero.publishedAt)}</div>
+      <div className={sectionHeading}><h2>Itajubá em destaque</h2><span className={eyebrow()}>O que move a nossa cidade</span></div>
+      <section className={cx('grid h-[clamp(440px,38vw,600px)] gap-4 max-lg:h-auto', sides.length ? 'grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)] max-lg:grid-cols-[minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]')}>
+        <Link className={cx(story, 'animate-rise max-lg:aspect-[16/10] max-sm:aspect-[4/5]')} href={'/noticias/' + hero.slug}>
+          {hero.imageUrl && <img className={storyImage} src={hero.imageUrl} alt="" fetchPriority="high"/>}
+          <div className={storyCopy}>
+            <span className={categoryTag()}>{categoryLabel(hero)}</span>
+            <h1 className={cx(storyTitle, 'mt-3.5 mb-3 max-w-[22ch] text-[clamp(1.625rem,1.05rem+2vw,2.75rem)] leading-[1.15] tracking-[-0.025em]')}>{hero.title}</h1>
+            <p className="mb-3 max-w-[62ch] text-16 leading-[1.5] text-[#e7e7ea] max-sm:line-clamp-3">{hero.excerpt}</p>
+            <div className={meta('text-[#d2d2d7]')}>{hero.author} · {dateLabel(hero.publishedAt)}</div>
           </div>
         </Link>
         {sides.length > 0 && (
-          <div className="hero-side">
-            {sides.map((a) => (
-              <Link className="story" href={'/noticias/' + a.slug} key={a.id}>
-                {a.imageUrl && <img src={a.imageUrl} alt="" loading="lazy" decoding="async"/>}
-                <div className="story-copy">
-                  <span className="category">{categoryLabel(a)}</span>
-                  <h3>{a.title}</h3>
-                  <div className="meta">{dateLabel(a.publishedAt)}</div>
+          <div className="grid auto-rows-[minmax(0,1fr)] gap-4 max-lg:auto-cols-[minmax(0,1fr)] max-lg:grid-flow-col max-lg:auto-rows-auto max-sm:grid-flow-row">
+            {sides.map((a, i) => (
+              <Link className={cx(story, 'animate-rise max-lg:aspect-[4/3] max-sm:aspect-[16/10]', i ? '[animation-delay:160ms]' : '[animation-delay:80ms]')} href={'/noticias/' + a.slug} key={a.id}>
+                {a.imageUrl && <img className={storyImage} src={a.imageUrl} alt="" loading="lazy" decoding="async"/>}
+                <div className={storyCopy}>
+                  <span className={categoryTag()}>{categoryLabel(a)}</span>
+                  <h3 className={cx(storyTitle, 'mt-2.5 mb-2 text-[clamp(1.1rem,0.95rem+0.55vw,1.375rem)] leading-[1.25]')}>{a.title}</h3>
+                  <div className={meta('text-[#d2d2d7]')}>{dateLabel(a.publishedAt)}</div>
                 </div>
               </Link>
             ))}
@@ -103,7 +110,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
       <NewsIndex top={hero && <Featured hero={hero} sides={sides}/>}>
         {news ? (
           <>
-            <div className="section-heading"><Heading>Últimas notícias</Heading><span className="eyebrow">{news.total} matéria(s)</span></div>
+            <div className={sectionHeading}><Heading>Últimas notícias</Heading><span className={eyebrow()}>{news.total} matéria(s)</span></div>
             <NewsList articles={news.items} empty="Nenhuma notícia publicada ainda."/>
             <Pagination path="/" page={page} total={news.total}/>
           </>

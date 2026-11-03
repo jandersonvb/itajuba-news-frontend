@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation';
 import type { Category, Me, Media, Sponsor, UserRole } from '@/lib/api';
 import { adminFetch, type AdminTheme, errorMessage, failure, IMAGE_TYPES, SESSION_EXPIRED_PATH, THEME_COOKIE, uploadImage } from '@/lib/admin-client';
 import { Resource, roleNames, tabsByRole } from '@/lib/permissions';
+import { admButton, admCallout, admHint, admIconButton, admLabel, cx } from '@/lib/styles';
+import { useConfirm } from './admin/ConfirmDialog';
+import DateTimeField from './admin/DateTimeField';
 import Icon, { type IconName } from './admin/Icon';
-import { Drawer, Dropdown, Field, ImageField, Select, slugify, Switch, TextArea } from './admin/ui';
+import { checkerboard, Drawer, Dropdown, Field, ImageField, menuItem, Select, slugify, Switch, TextArea } from './admin/ui';
 import {
   type ArticleDraft,
   deleteAllDrafts,
@@ -106,7 +109,38 @@ const hostname = (v: unknown) => {
 const tabHref = (r: Resource) => (r === 'articles' ? '/admin' : '/admin?aba=' + r);
 
 type Tone = 'ok' | 'warn' | 'off' | 'info';
-const Pill = ({ tone, children }: { tone: Tone; children: React.ReactNode }) => <span className={'adm-pill ' + tone}>{children}</span>;
+const pillTones: Record<Tone, string> = {
+  ok: 'bg-adm-ok-bg text-adm-ok',
+  warn: 'bg-adm-warn-bg text-adm-warn',
+  off: 'bg-adm-chip text-adm-muted',
+  info: 'bg-adm-info-bg text-adm-info',
+};
+/** Status tag with a dot in the text color. */
+const Pill = ({ tone, children }: { tone: Tone; children: React.ReactNode }) => (
+  <span className={cx("inline-flex items-center gap-1.5 rounded-full px-[9px] py-1 text-12 leading-none font-bold whitespace-nowrap before:size-1.5 before:rounded-full before:bg-current before:content-['']", pillTones[tone])}>{children}</span>
+);
+
+/** Round avatar with the initials. */
+const avatar = (size: 'sm' | 'md' | 'lg' = 'md') =>
+  cx(
+    'grid shrink-0 place-items-center rounded-full bg-[linear-gradient(140deg,#ff4d55,var(--color-red)_55%,#9b0b12)] leading-none font-extrabold tracking-[0.02em] text-white',
+    { sm: 'size-8 text-12', md: 'size-9 text-13', lg: 'size-12 text-16' }[size],
+  );
+
+/** Small image (or icon placeholder) at the start of a table row. */
+const thumb = (kind: 'photo' | 'logo' | 'banner', empty: boolean) =>
+  cx(
+    'grid h-11 shrink-0 place-items-center overflow-hidden rounded-md border border-adm-border text-adm-faint',
+    kind === 'logo' ? 'w-11 p-1' : kind === 'banner' ? 'w-24' : 'w-16',
+    empty ? 'bg-adm-raised' : kind === 'logo' ? 'bg-white object-contain' : 'bg-adm-raised object-cover',
+  );
+
+const cellTitle = 'block leading-[1.35] font-bold text-adm-strong';
+const cellSub = 'mt-[3px] block overflow-hidden text-12 text-ellipsis text-adm-faint';
+const cellMedia = 'flex min-w-0 items-center gap-3';
+
+/** Width of the table columns: `wide` takes the free space and wraps, `narrow` fits its content. */
+const columnWidth = { wide: 'w-full min-w-[260px] whitespace-normal', narrow: 'w-[1%] whitespace-nowrap', auto: 'whitespace-nowrap' };
 
 function campaignState(c: Row): [string, Tone] {
   if (!c.active) return ['Inativa', 'off'];
@@ -175,7 +209,7 @@ async function send<T = unknown>(url: string, method: string, data?: unknown, fa
 }
 
 function IconButton({ icon, label, danger, ...button }: { icon: IconName; label: string; danger?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button type="button" className={'adm-icon-btn' + (danger ? ' danger' : '')} aria-label={label} title={label} {...button}><Icon name={icon}/></button>;
+  return <button type="button" className={admIconButton({ danger })} aria-label={label} title={label} {...button}><Icon name={icon}/></button>;
 }
 
 /** Panel where an admin sets a new password for a user; the API then ends that user's sessions. */
@@ -203,7 +237,7 @@ function PasswordDialog({ user, self, onClose, onDone }: { user: Row; self: bool
 
   return (
     <Drawer title="Redefinir senha" description={user.name ? `${user.name} · ${user.email}` : user.email} submitLabel="Redefinir senha" busy={busy} error={error} onSubmit={submit} onClose={onClose}>
-      <p className="adm-callout">Todas as sessões abertas deste usuário serão encerradas. Ele precisará entrar de novo com a nova senha.{self ? ' Como é a sua conta, você também sairá do painel.' : ''}</p>
+      <p className={admCallout()}>Todas as sessões abertas deste usuário serão encerradas. Ele precisará entrar de novo com a nova senha.{self ? ' Como é a sua conta, você também sairá do painel.' : ''}</p>
       <Field name="password" label="Nova senha" type="password" minLength={12} maxLength={200} autoComplete="new-password" autoFocus hint="Mínimo de 12 caracteres."/>
       <Field name="confirm" label="Repita a nova senha" type="password" minLength={12} maxLength={200} autoComplete="new-password"/>
     </Drawer>
@@ -234,6 +268,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   const [menuOpen, setMenuOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
+  const [ask, confirmDialog] = useConfirm();
   const tab = tabs[resource];
   const edit = form?.row ?? null;
 
@@ -356,8 +391,8 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     openForm(draft.articleId ? rows.find((r) => r.id === draft.articleId) ?? null : null, draft);
   }
 
-  function discardStoredDraft(draft: StoredDraft) {
-    if (!confirm('Descartar este texto não salvo? Ele não poderá ser recuperado.')) return;
+  async function discardStoredDraft(draft: StoredDraft) {
+    if (!(await ask({ title: 'Descartar este texto não salvo?', message: 'Ele não poderá ser recuperado.', confirmLabel: 'Descartar', danger: true }))) return;
     deleteDraft(me.id, draft.articleId);
     setDrafts(listDrafts(me.id));
   }
@@ -408,7 +443,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   }
 
   async function remove(id: string) {
-    if (!confirm('Excluir este registro? Esta ação não pode ser desfeita.')) return;
+    if (!(await ask({ title: 'Excluir este registro?', message: 'Esta ação não pode ser desfeita.', confirmLabel: 'Excluir', danger: true }))) return;
     setBusy(true);
     try {
       await send('/api/admin/' + resource + '/' + id, 'DELETE', undefined, 'Não foi possível excluir');
@@ -425,7 +460,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   /** Users are never deleted: deactivating ends their sessions right away and can be undone. */
   async function toggleActive(user: Row) {
     const action = user.active ? 'Desativar' : 'Reativar';
-    if (user.active && !confirm(`Desativar ${user.name || user.email}? As sessões abertas serão encerradas na hora.`)) return;
+    if (user.active && !(await ask({ title: `Desativar ${user.name || user.email}?`, message: 'As sessões abertas serão encerradas na hora. Você pode reativar a conta depois.', confirmLabel: 'Desativar', danger: true }))) return;
     setBusy(true);
     try {
       await send('/api/admin/users/' + user.id, 'PATCH', { active: !user.active }, `Não foi possível ${action.toLowerCase()} o usuário`);
@@ -539,7 +574,14 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   /** Leaving on purpose deletes the drafts (after asking); an expired session (401) never does. */
   async function logout() {
     if (listDrafts(me.id).length) {
-      if (!confirm('Você tem textos não salvos neste navegador. Sair e apagá-los?')) return;
+      const ok = await ask({
+        title: 'Sair e apagar os textos não salvos?',
+        message: 'Você tem textos não salvos neste navegador. Ao sair, eles serão apagados.',
+        confirmLabel: 'Sair e apagar',
+        cancelLabel: 'Continuar no painel',
+        danger: true,
+      });
+      if (!ok) return;
       deleteAllDrafts(me.id);
     }
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -572,19 +614,19 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     </>
   );
 
-  type Column = { label: string; cell: (row: Row) => React.ReactNode; className?: string };
+  type Column = { label: string; cell: (row: Row) => React.ReactNode; width?: keyof typeof columnWidth };
   const columns: Partial<Record<Resource, Column[]>> = {
     articles: [
-      { label: 'Notícia', className: 'wide', cell: (r) => (
-        <div className="adm-cell-media">
-          {r.imageUrl ? <img className="adm-thumb" src={String(r.imageUrl)} alt="" loading="lazy"/> : <span className="adm-thumb empty"><Icon name="articles"/></span>}
-          <div><b className="adm-cell-title">{r.title}</b><small className="adm-cell-sub">/noticias/{String(r.slug)}</small></div>
+      { label: 'Notícia', width: 'wide', cell: (r) => (
+        <div className={cellMedia}>
+          {r.imageUrl ? <img className={thumb('photo', false)} src={String(r.imageUrl)} alt="" loading="lazy"/> : <span className={thumb('photo', true)}><Icon name="articles"/></span>}
+          <div className="min-w-0"><b className={cellTitle}>{r.title}</b><small className={cellSub}>/noticias/{String(r.slug)}</small></div>
         </div>
       ) },
       { label: 'Editoria', cell: (r) => categoryName.get(String(r.categoryId)) ?? '—' },
       { label: 'Autoria', cell: (r) => String(r.author || '—') },
       { label: 'Status', cell: (r) => (
-        <div className="adm-pills">
+        <div className="flex flex-wrap gap-1.5">
           {r.status === 'published' ? <Pill tone="ok">Publicada</Pill> : <Pill tone="warn">Rascunho</Pill>}
           {!!r.featured && <Pill tone="info">Destaque</Pill>}
         </div>
@@ -592,48 +634,55 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
       { label: 'Data', cell: (r) => (
         <>
           {typeof r.publishedAt === 'string' ? dateLabel(r.publishedAt) : r.createdAt ? dateLabel(r.createdAt) : '—'}
-          <small className="adm-cell-sub">{typeof r.publishedAt === 'string' ? 'publicada' : 'criada'}</small>
+          <small className={cellSub}>{typeof r.publishedAt === 'string' ? 'publicada' : 'criada'}</small>
         </>
       ) },
     ],
     categories: [
-      { label: 'Posição', className: 'narrow', cell: (r) => <span className="adm-position">{String(r.position)}</span> },
-      { label: 'Editoria', className: 'wide', cell: (r) => <><b className="adm-cell-title">{r.name}</b><small className="adm-cell-sub">/editoria/{String(r.slug)}</small></> },
+      { label: 'Posição', width: 'narrow', cell: (r) => <span className="inline-grid h-[26px] min-w-[30px] place-items-center rounded-md border border-adm-border-strong px-2 font-extrabold text-adm-strong tabular-nums">{String(r.position)}</span> },
+      { label: 'Editoria', width: 'wide', cell: (r) => <><b className={cellTitle}>{r.name}</b><small className={cellSub}>/editoria/{String(r.slug)}</small></> },
     ],
     sponsors: [
-      { label: 'Patrocinador', className: 'wide', cell: (r) => (
-        <div className="adm-cell-media">
-          {r.logoUrl ? <img className="adm-thumb logo" src={String(r.logoUrl)} alt="" loading="lazy"/> : <span className="adm-thumb logo empty"><Icon name="sponsors"/></span>}
-          <b className="adm-cell-title">{r.name}</b>
+      { label: 'Patrocinador', width: 'wide', cell: (r) => (
+        <div className={cellMedia}>
+          {r.logoUrl ? <img className={thumb('logo', false)} src={String(r.logoUrl)} alt="" loading="lazy"/> : <span className={thumb('logo', true)}><Icon name="sponsors"/></span>}
+          <b className={cellTitle}>{r.name}</b>
         </div>
       ) },
-      { label: 'Site', cell: (r) => (r.websiteUrl ? <a className="adm-link" href={String(r.websiteUrl)} target="_blank" rel="noopener noreferrer">{hostname(r.websiteUrl)}<Icon name="external"/></a> : '—') },
+      { label: 'Site', cell: (r) => (r.websiteUrl ? (
+        <a className="inline-flex items-center gap-1.5 font-semibold text-adm-text hover:text-adm-strong hover:underline [&_svg]:size-[13px] [&_svg]:text-adm-faint" href={String(r.websiteUrl)} target="_blank" rel="noopener noreferrer">
+          {hostname(r.websiteUrl)}<Icon name="external"/>
+        </a>
+      ) : '—') },
       { label: 'Status', cell: (r) => (r.active ? <Pill tone="ok">Ativo</Pill> : <Pill tone="off">Inativo</Pill>) },
     ],
     campaigns: [
-      { label: 'Campanha', className: 'wide', cell: (r) => (
-        <div className="adm-cell-media">
-          {r.imageUrl ? <img className="adm-thumb banner" src={String(r.imageUrl)} alt="" loading="lazy"/> : <span className="adm-thumb banner empty"><Icon name="campaigns"/></span>}
-          <div><b className="adm-cell-title">{r.name}</b><small className="adm-cell-sub">{sponsorName(r)}</small></div>
+      { label: 'Campanha', width: 'wide', cell: (r) => (
+        <div className={cellMedia}>
+          {r.imageUrl ? <img className={thumb('banner', false)} src={String(r.imageUrl)} alt="" loading="lazy"/> : <span className={thumb('banner', true)}><Icon name="campaigns"/></span>}
+          <div className="min-w-0"><b className={cellTitle}>{r.name}</b><small className={cellSub}>{sponsorName(r)}</small></div>
         </div>
       ) },
       { label: 'Posição', cell: (r) => slots[String(r.slot)] ?? String(r.slot) },
-      { label: 'Vigência', cell: (r) => <>{dayLabel(r.startsAt)} <span className="adm-faint">→</span> {dayLabel(r.endsAt)}</> },
+      { label: 'Vigência', cell: (r) => <>{dayLabel(r.startsAt)} <span className="text-adm-faint">→</span> {dayLabel(r.endsAt)}</> },
       { label: 'Status', cell: (r) => { const [label, tone] = campaignState(r); return <Pill tone={tone}>{label}</Pill>; } },
     ],
     leads: [
-      { label: 'Contato', cell: (r) => <><b className="adm-cell-title">{r.name}</b><small className="adm-cell-sub">{r.email}</small></> },
+      { label: 'Contato', cell: (r) => <><b className={cellTitle}>{r.name}</b><small className={cellSub}>{r.email}</small></> },
       { label: 'Interesse', cell: (r) => <Pill tone="info">{r.interest}</Pill> },
-      { label: 'Mensagem', className: 'wide', cell: (r) => <p className="adm-cell-text">{r.message}</p> },
+      { label: 'Mensagem', width: 'wide', cell: (r) => <p className="max-w-[60ch] leading-[1.5] whitespace-pre-line text-adm-cell [overflow-wrap:anywhere]">{r.message}</p> },
       { label: 'Recebido em', cell: (r) => (r.createdAt ? dateLabel(r.createdAt) : '—') },
     ],
     users: [
-      { label: 'Usuário', className: 'wide', cell: (u) => (
-        <div className="adm-cell-media">
-          <span className="adm-avatar small" aria-hidden="true">{initials(u.name || u.email || '?')}</span>
-          <div>
-            <b className="adm-cell-title">{u.name || '—'}{u.id === me.id && <span className="adm-you">você</span>}</b>
-            <small className="adm-cell-sub">{u.email}</small>
+      { label: 'Usuário', width: 'wide', cell: (u) => (
+        <div className={cellMedia}>
+          <span className={avatar('sm')} aria-hidden="true">{initials(u.name || u.email || '?')}</span>
+          <div className="min-w-0">
+            <b className={cellTitle}>
+              {u.name || '—'}
+              {u.id === me.id && <span className="ml-2 rounded-full bg-adm-chip px-[7px] py-0.5 align-[1px] text-11 font-bold text-adm-muted">você</span>}
+            </b>
+            <small className={cellSub}>{u.email}</small>
           </div>
         </div>
       ) },
@@ -642,7 +691,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
         if (!u.active) return <Pill tone="off">Inativo</Pill>;
         if (!u.pending) return <Pill tone="ok">Ativo</Pill>;
         if (!u.inviteExpiresAt || Date.parse(u.inviteExpiresAt) < Date.now()) return <Pill tone="off">Convite expirado</Pill>;
-        return <><Pill tone="warn">Convite pendente</Pill><small className="adm-cell-sub">vale até {dateLabel(u.inviteExpiresAt)}</small></>;
+        return <><Pill tone="warn">Convite pendente</Pill><small className={cellSub}>vale até {dateLabel(u.inviteExpiresAt)}</small></>;
       } },
       { label: 'Criado em', cell: (u) => (u.createdAt ? dateLabel(u.createdAt) : '—') },
     ],
@@ -652,7 +701,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
     if (resource === 'leads')
       return (
         <>
-          <a className="adm-icon-btn" href={'mailto:' + row.email} aria-label={'Responder ' + row.email} title="Responder por e-mail"><Icon name="mail"/></a>
+          <a className={admIconButton()} href={'mailto:' + row.email} aria-label={'Responder ' + row.email} title="Responder por e-mail"><Icon name="mail"/></a>
           <IconButton icon="trash" label="Excluir" danger disabled={busy} onClick={() => remove(row.id)}/>
         </>
       );
@@ -671,42 +720,51 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   };
 
   const cards = stats(resource, rows);
+  const shimmer = 'h-3 animate-shimmer rounded-md bg-[linear-gradient(90deg,var(--color-adm-skeleton-a)_25%,var(--color-adm-skeleton-b)_50%,var(--color-adm-skeleton-a)_75%)] bg-[length:200%_100%]';
   const skeleton = (
-    <div className="adm-skeleton" aria-busy="true" aria-label="Carregando">
-      {[0, 1, 2, 3, 4].map((i) => <div key={i}><span/><span/><span/></div>)}
+    <div aria-busy="true" aria-label="Carregando">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="flex items-center gap-4 border-b border-adm-border p-4">
+          <span className={cx(shimmer, 'h-10 flex-[0_0_64px]')}/>
+          <span className={cx(shimmer, 'flex-1')}/>
+          <span className={cx(shimmer, 'flex-[0_0_120px]')}/>
+        </div>
+      ))}
     </div>
   );
+  const emptyBox = 'grid justify-items-center gap-2 px-5 py-14 text-center text-adm-muted';
+  const emptyIcon = 'mb-1.5 grid size-[52px] place-items-center rounded-[14px] border border-adm-border-strong bg-adm-raised text-adm-text [&_svg]:size-[22px]';
 
   let body: React.ReactNode;
   if (loading) body = skeleton;
   else if (rows.length === 0)
     body = (
-      <div className="adm-empty">
-        <span><Icon name={tab.icon}/></span>
-        <b>Nada por aqui ainda</b>
-        <p>{resource === 'media' ? 'Arraste imagens para cá ou use “Enviar imagens”.' : resource === 'leads' ? 'Os pedidos do formulário “Anuncie” aparecerão aqui.' : `Nenhum registro em ${tab.title.toLowerCase()}.`}</p>
-        {tab.create && <button type="button" className="adm-btn primary" onClick={() => openForm(null)}><Icon name="plus"/>{tab.create}</button>}
+      <div className={emptyBox}>
+        <span className={emptyIcon}><Icon name={tab.icon}/></span>
+        <b className="text-16 text-adm-strong">Nada por aqui ainda</b>
+        <p className="mb-2 max-w-[44ch] leading-[1.5]">{resource === 'media' ? 'Arraste imagens para cá ou use “Enviar imagens”.' : resource === 'leads' ? 'Os pedidos do formulário “Anuncie” aparecerão aqui.' : `Nenhum registro em ${tab.title.toLowerCase()}.`}</p>
+        {tab.create && <button type="button" className={admButton('primary')} onClick={() => openForm(null)}><Icon name="plus"/>{tab.create}</button>}
       </div>
     );
   else if (visible.length === 0)
     body = (
-      <div className="adm-empty">
-        <span><Icon name="search"/></span>
-        <b>Nenhum resultado</b>
-        <p>Nada encontrado com esses filtros.</p>
-        <button type="button" className="adm-btn" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Limpar filtros</button>
+      <div className={emptyBox}>
+        <span className={emptyIcon}><Icon name="search"/></span>
+        <b className="text-16 text-adm-strong">Nenhum resultado</b>
+        <p className="mb-2 max-w-[44ch] leading-[1.5]">Nada encontrado com esses filtros.</p>
+        <button type="button" className={admButton()} onClick={() => { setQuery(''); setStatusFilter('all'); }}>Limpar filtros</button>
       </div>
     );
   else if (resource === 'media')
     body = (
-      <div className="adm-media-grid">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3.5 p-4">
         {(visible as unknown as Media[]).map((m) => (
-          <figure className="adm-media" key={m.id}>
-            <a href={m.url} target="_blank" rel="noopener" aria-label={'Abrir ' + m.originalName}><img src={m.url} alt="" loading="lazy"/></a>
-            <figcaption>
-              <b title={m.originalName}>{m.originalName}</b>
-              <small>{sizeLabel(m.size)} · {dateLabel(m.createdAt)}</small>
-              <div className="adm-row-actions">
+          <figure className="m-0 flex flex-col overflow-hidden rounded-[10px] border border-adm-border bg-adm-raised transition-colors duration-150 hover:border-adm-border-strong" key={m.id}>
+            <a href={m.url} target="_blank" rel="noopener" aria-label={'Abrir ' + m.originalName}><img className={cx('block aspect-[4/3] w-full object-contain', checkerboard)} src={m.url} alt="" loading="lazy"/></a>
+            <figcaption className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 py-2.5 pr-2 pl-3">
+              <b className="truncate text-13 text-adm-strong" title={m.originalName}>{m.originalName}</b>
+              <small className="col-start-1 text-12 text-adm-faint">{sizeLabel(m.size)} · {dateLabel(m.createdAt)}</small>
+              <div className="col-start-2 row-span-2 row-start-1 flex justify-end gap-0.5">
                 <IconButton icon="copy" label="Copiar URL" onClick={() => copy(m.url)}/>
                 {!reporter && <IconButton icon="trash" label="Excluir" danger disabled={busy} onClick={() => remove(m.id)}/>}
               </div>
@@ -718,19 +776,23 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   else {
     const cols = columns[resource] ?? [];
     body = (
-      <div className="adm-table-scroll">
-        <table className="adm-table">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse">
           <thead>
             <tr>
-              {cols.map((c) => <th key={c.label} scope="col" className={c.className}>{c.label}</th>)}
-              <th scope="col" className="actions"><span className="sr-only">Ações</span></th>
+              {cols.map((c) => (
+                <th key={c.label} scope="col" className={cx('border-b border-adm-border bg-adm-raised px-4 py-2.5 text-left text-11 leading-[1.2] font-bold tracking-[0.08em] text-adm-faint uppercase', columnWidth[c.width ?? 'auto'])}>
+                  {c.label}
+                </th>
+              ))}
+              <th scope="col" className={cx('border-b border-adm-border bg-adm-raised px-4 py-2.5', columnWidth.narrow)}><span className="sr-only">Ações</span></th>
             </tr>
           </thead>
           <tbody>
             {visible.map((row) => (
-              <tr key={row.id} className={resource === 'users' && !row.active ? 'muted' : undefined}>
-                {cols.map((c) => <td key={c.label} className={c.className}>{c.cell(row)}</td>)}
-                <td className="actions"><div className="adm-row-actions">{rowActions(row)}</div></td>
+              <tr key={row.id} className={cx('transition-colors duration-100 hover:bg-adm-hover [&:last-child>td]:border-b-0', resource === 'users' && !row.active && '[&>td]:opacity-55')}>
+                {cols.map((c) => <td key={c.label} className={cx('border-b border-adm-border px-4 py-3 align-middle text-adm-cell', columnWidth[c.width ?? 'auto'])}>{c.cell(row)}</td>)}
+                <td className={cx('border-b border-adm-border px-4 py-3 align-middle', columnWidth.narrow)}><div className="flex justify-end gap-0.5">{rowActions(row)}</div></td>
               </tr>
             ))}
           </tbody>
@@ -753,46 +815,91 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
   const values = form?.restored ?? articleDefaults(edit);
 
   const draftList = resource === 'articles' && !loading && drafts.length > 0 && (
-    <section className="adm-callout adm-drafts" aria-label="Textos não salvos">
+    <section className={cx(admCallout(), 'mb-5 grid gap-2.5')} aria-label="Textos não salvos">
       <p><b>{drafts.length === 1 ? 'Você tem 1 texto não salvo neste navegador.' : `Você tem ${drafts.length} textos não salvos neste navegador.`}</b></p>
-      <ul>
+      <ul className="grid gap-2">
         {drafts.map((d) => (
-          <li key={d.articleId ?? 'nova'}>
-            <span>
-              <b>{d.fields.title.trim() || 'Sem título'}</b>
+          <li key={d.articleId ?? 'nova'} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="grid min-w-0 flex-[1_1_220px]">
+              <b className="truncate">{d.fields.title.trim() || 'Sem título'}</b>
               <small>{d.articleId ? 'Edição' : 'Nova notícia'} · {draftTimeLabel(d.savedAt)}</small>
             </span>
-            <button type="button" className="adm-btn" disabled={busy} onClick={() => openDraft(d)}>Abrir</button>
-            <button type="button" className="adm-btn ghost" onClick={() => discardStoredDraft(d)}>Descartar</button>
+            <button type="button" className={admButton()} disabled={busy} onClick={() => openDraft(d)}>Abrir</button>
+            <button type="button" className={admButton('ghost')} onClick={() => discardStoredDraft(d)}>Descartar</button>
           </li>
         ))}
       </ul>
     </section>
   );
 
+  const navLink = (current: boolean) =>
+    cx(
+      'flex items-center gap-3 rounded-lg px-3 py-2.5 font-semibold whitespace-nowrap transition-colors duration-150 group-data-collapsed/adm:justify-center',
+      current ? 'bg-red text-white shadow-adm-nav' : 'text-adm-nav hover:bg-adm-raised hover:text-adm-strong',
+    );
+  const hiddenCollapsed = 'group-data-collapsed/adm:hidden';
+  const sectionTitle = 'text-11 leading-none font-bold tracking-[0.12em] text-adm-faint uppercase';
+
   return (
-    <div className={'adm' + (collapsed ? ' collapsed' : '') + (menuOpen ? ' menu-open' : '')} data-theme={theme}>
-      <aside className="adm-sidebar" id="adm-sidebar">
-        <div className="adm-brand">
-          {/* White lettering on dark themes, the original logo on light ones; CSS shows one of them. */}
+    <div
+      className={cx(
+        // `adm` marks the panel for the page background in globals.css; `group/adm` carries its state.
+        'adm group/adm grid min-h-dvh bg-adm-bg text-14 text-adm-text transition-[grid-template-columns] duration-200 ease-soft',
+        '[color-scheme:dark] data-[theme=light]:[color-scheme:light] data-[theme=system]:[color-scheme:light_dark]',
+        '[--focus-offset:2px] [--focus-ring:2px_solid_var(--color-adm-focus)]',
+        collapsed ? 'grid-cols-[72px_minmax(0,1fr)]' : 'grid-cols-[248px_minmax(0,1fr)]',
+        'max-lg:grid-cols-[minmax(0,1fr)]',
+      )}
+      data-theme={theme}
+      data-collapsed={collapsed || undefined}
+      data-menu={menuOpen || undefined}
+    >
+      <aside
+        id="adm-sidebar"
+        className={cx(
+          'sticky top-0 flex h-dvh flex-col overflow-x-hidden overflow-y-auto border-r border-adm-border bg-adm-surface',
+          // Tablets and phones: an off-canvas menu.
+          'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-40 max-lg:w-[272px] max-lg:-translate-x-full max-lg:transition-transform max-lg:duration-200 max-lg:ease-soft',
+          'max-lg:group-data-menu/adm:translate-x-0 max-lg:group-data-menu/adm:shadow-adm-menu',
+        )}
+      >
+        <div className="flex min-h-[76px] items-center gap-3 border-b border-adm-border px-5 py-3.5 group-data-collapsed/adm:justify-center group-data-collapsed/adm:px-2.5">
+          {/* White lettering on dark themes, the original logo on light ones. */}
           <Link href="/" aria-label="Itajubá News: abrir o portal">
-            <img className="adm-logo-dark" src="/logo-dark.png" alt="" width={400} height={220}/>
-            <img className="adm-logo-light" src="/logo.png" alt="" width={225} height={225}/>
+            <img
+              className="block h-auto w-[92px] group-data-collapsed/adm:w-12 group-data-[theme=light]/adm:hidden os-light:group-data-[theme=system]/adm:hidden"
+              src="/logo-dark.png"
+              alt=""
+              width={400}
+              height={220}
+            />
+            {/* logo.png is a square with wide white margins; cover crops it like the portal header does. */}
+            <img
+              className="hidden h-[53px] w-[92px] object-cover group-data-collapsed/adm:h-7 group-data-collapsed/adm:w-12 group-data-[theme=light]/adm:block os-light:group-data-[theme=system]/adm:block"
+              src="/logo.png"
+              alt=""
+              width={225}
+              height={225}
+            />
           </Link>
-          <span>Redação</span>
+          <span className={cx('border-l border-adm-border-strong pl-3 text-11 leading-none font-bold tracking-[0.14em] text-adm-muted uppercase', hiddenCollapsed)}>Redação</span>
         </div>
-        <nav className="adm-nav" aria-label="Seções do painel">
+        <nav className="flex-1 px-3 py-4" aria-label="Seções do painel">
           {groups.map((g) => {
             const items = g.items.filter((r) => allowed.includes(r));
             if (!items.length) return null;
             return (
-              <div className="adm-nav-group" key={g.title}>
-                <p className="adm-nav-title">{g.title}</p>
+              <div
+                className="mt-5 first:mt-0 group-data-collapsed/adm:not-first:mt-3 group-data-collapsed/adm:not-first:border-t group-data-collapsed/adm:not-first:border-adm-border group-data-collapsed/adm:not-first:pt-3"
+                key={g.title}
+              >
+                <p className={cx('mb-2 px-3 whitespace-nowrap', sectionTitle, hiddenCollapsed)}>{g.title}</p>
                 <ul>
                   {items.map((r) => (
-                    <li key={r}>
+                    <li key={r} className="not-first:mt-0.5">
                       <a
                         href={tabHref(r)}
+                        className={navLink(r === resource)}
                         aria-current={r === resource ? 'page' : undefined}
                         title={collapsed ? tabs[r].title : undefined}
                         onClick={(e) => {
@@ -803,7 +910,7 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
                         }}
                       >
                         <Icon name={tabs[r].icon}/>
-                        <span>{tabs[r].title}</span>
+                        <span className={hiddenCollapsed}>{tabs[r].title}</span>
                       </a>
                     </li>
                   ))}
@@ -812,23 +919,27 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
             );
           })}
         </nav>
-        <div className="adm-sidebar-foot">
-          <a href="/" target="_blank" rel="noopener" title={collapsed ? 'Ver portal' : undefined}><Icon name="external"/><span>Ver portal</span></a>
+        <div className="border-t border-adm-border p-3">
+          <a href="/" target="_blank" rel="noopener" className={navLink(false)} title={collapsed ? 'Ver portal' : undefined}><Icon name="external"/><span className={hiddenCollapsed}>Ver portal</span></a>
         </div>
       </aside>
-      {menuOpen && <div className="adm-scrim" aria-hidden="true" onClick={() => setMenuOpen(false)}/>}
+      {menuOpen && <div className="fixed inset-0 z-30 bg-[rgb(8_8_12/0.5)] lg:hidden" aria-hidden="true" onClick={() => setMenuOpen(false)}/>}
 
-      <div className="adm-main">
-        <header className="adm-topbar">
+      <div className="flex min-w-0 flex-col">
+        <header className="sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b border-adm-border bg-[color-mix(in_srgb,var(--color-adm-bg)_86%,transparent)] px-7 backdrop-blur-[12px] max-lg:px-4">
           <IconButton icon="sidebar" label="Mostrar ou ocultar o menu" aria-controls="adm-sidebar" onClick={toggleNav}/>
-          <p className="adm-crumb">Redação <span aria-hidden="true">/</span> <b>{tab.title}</b></p>
-          <div className="adm-topbar-actions">
-            <Dropdown label={'Tema: ' + themes.find((t) => t.value === theme)?.label} className="adm-icon-btn" panelClassName="adm-theme-menu" trigger={<Icon name={themes.find((t) => t.value === theme)?.icon ?? 'moon'}/>}>
+          <p className="truncate font-semibold text-adm-faint max-sm:hidden">Redação <span className="mx-1" aria-hidden="true">/</span> <b className="text-adm-text">{tab.title}</b></p>
+          <div className="ml-auto flex items-center gap-1.5">
+            <Dropdown
+              label={'Tema: ' + themes.find((t) => t.value === theme)?.label}
+              className={cx(admIconButton(), 'aria-expanded:border-adm-border-strong aria-expanded:bg-adm-raised aria-expanded:text-adm-strong')}
+              trigger={<Icon name={themes.find((t) => t.value === theme)?.icon ?? 'moon'}/>}
+            >
               {(close) => <>
-                <p className="adm-menu-title">Tema</p>
+                <p className="px-2.5 pt-2 pb-1.5 text-13 font-extrabold text-adm-strong">Tema</p>
                 {themes.map((t) => (
-                  <button type="button" key={t.value} className="adm-menu-item" aria-pressed={theme === t.value} onClick={() => { chooseTheme(t.value); close(); }}>
-                    <span className="adm-menu-dot" aria-hidden="true"/>
+                  <button type="button" key={t.value} className={cx(menuItem(), theme === t.value && 'text-adm-strong')} aria-pressed={theme === t.value} onClick={() => { chooseTheme(t.value); close(); }}>
+                    <span className={cx('size-1.5 shrink-0 rounded-full', theme === t.value && 'bg-adm-strong')} aria-hidden="true"/>
                     <Icon name={t.icon}/>
                     {t.label}
                   </button>
@@ -837,60 +948,67 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
             </Dropdown>
             <Dropdown
               label={'Conta de ' + (me.name || me.email)}
-              className="adm-user-btn"
-              panelClassName="adm-account"
+              className="flex max-w-[300px] items-center gap-2.5 rounded-xl border border-transparent bg-transparent py-1 pr-2.5 pl-1 text-left transition-[background-color,border-color] duration-150 hover:border-adm-border hover:bg-adm-raised aria-expanded:border-adm-border aria-expanded:bg-adm-raised max-lg:pr-1"
+              panelClassName="w-[300px] pt-0 max-sm:w-[min(300px,calc(100vw-32px))]"
               trigger={<>
-                <span className="adm-avatar" aria-hidden="true">{initials(me.name || me.email)}</span>
-                <span className="adm-user-text">
-                  <b>{me.name || me.email}</b>
-                  <small>{me.name ? me.email : roleNames[me.role]}</small>
+                <span className={avatar()} aria-hidden="true">{initials(me.name || me.email)}</span>
+                <span className="grid min-w-0 gap-[3px] leading-[1.2] max-lg:hidden">
+                  <b className="truncate text-13 text-adm-strong">{me.name || me.email}</b>
+                  <small className="truncate text-12 text-adm-muted">{me.name ? me.email : roleNames[me.role]}</small>
                 </span>
               </>}
             >
               {() => <>
-                <div className="adm-profile">
-                  <span className="adm-avatar large" aria-hidden="true">{initials(me.name || me.email)}</span>
-                  <div>
-                    <b>{me.name || 'Sem nome'}</b>
-                    <small>{me.email}</small>
+                <div className="-mx-1.5 mb-1.5 flex items-center gap-3 border-b border-adm-border px-4 pt-4 pb-3.5">
+                  <span className={avatar('lg')} aria-hidden="true">{initials(me.name || me.email)}</span>
+                  <div className="grid min-w-0 gap-[3px]">
+                    <b className="truncate text-15 text-adm-strong">{me.name || 'Sem nome'}</b>
+                    <small className="truncate text-13 text-adm-muted">{me.email}</small>
                   </div>
                 </div>
-                <dl className="adm-facts">
-                  <div><dt><Icon name="idCard"/>ID do usuário</dt><dd title={me.id}>#{me.id.slice(0, 8)}</dd></div>
-                  <div><dt><Icon name="shield"/>Perfil</dt><dd>{roleNames[me.role].replace(/ \(.*\)$/, '')} <span className="adm-fact-tag">{accessTags[me.role]}</span></dd></div>
-                  <div><dt><Icon name="globe"/>Portal</dt><dd>Itajubá News</dd></div>
-                  <div><dt><Icon name="grid"/>Áreas liberadas</dt><dd>{allowed.length === Object.keys(tabs).length ? 'todas' : `${allowed.length} de ${Object.keys(tabs).length}`}</dd></div>
+                <dl className="m-0 grid gap-0.5 px-1 pt-0.5 pb-1">
+                  {[
+                    ['idCard', 'ID do usuário', <span key="id" title={me.id}>#{me.id.slice(0, 8)}</span>],
+                    ['shield', 'Perfil', <>{roleNames[me.role].replace(/ \(.*\)$/, '')} <span className="ml-1 text-adm-ok">{accessTags[me.role]}</span></>],
+                    ['globe', 'Portal', 'Itajubá News'],
+                    ['grid', 'Áreas liberadas', allowed.length === Object.keys(tabs).length ? 'todas' : `${allowed.length} de ${Object.keys(tabs).length}`],
+                  ].map(([icon, label, value]) => (
+                    <div key={label as string} className="flex items-center justify-between gap-3 p-1.5">
+                      <dt className="flex items-center gap-2.5 text-13 text-adm-muted [&_svg]:size-4"><Icon name={icon as IconName}/>{label}</dt>
+                      <dd className="m-0 text-right text-13 font-extrabold whitespace-nowrap text-adm-strong">{value}</dd>
+                    </div>
+                  ))}
                 </dl>
-                <div className="adm-menu-sep"/>
-                <a className="adm-menu-item" href="/" target="_blank" rel="noopener"><Icon name="external"/>Ver portal</a>
-                <button type="button" className="adm-menu-item danger" onClick={logout}><Icon name="logout"/>Sair</button>
+                <div className="-mx-1.5 my-1.5 h-px bg-adm-border"/>
+                <a className={menuItem()} href="/" target="_blank" rel="noopener"><Icon name="external"/>Ver portal</a>
+                <button type="button" className={menuItem(true)} onClick={logout}><Icon name="logout"/>Sair</button>
               </>}
             </Dropdown>
           </div>
         </header>
 
-        <main className="adm-content">
-          <div className="adm-page-head">
-            <div>
-              <h1>{tab.title}</h1>
-              <p>{reporter && resource === 'articles' ? 'Suas matérias. Escreva como rascunho; um editor revisa e publica.' : tab.description}</p>
+        <main className="w-full max-w-[1480px] px-7 pt-7 pb-16 max-lg:px-4 max-sm:pt-5">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+            <div className="min-w-0 flex-[1_1_420px]">
+              <h1 className="text-26 tracking-[-0.02em] text-adm-strong">{tab.title}</h1>
+              <p className="mt-1.5 max-w-[72ch] leading-[1.55] text-adm-muted">{reporter && resource === 'articles' ? 'Suas matérias. Escreva como rascunho; um editor revisa e publica.' : tab.description}</p>
             </div>
-            {tab.create && <button type="button" className="adm-btn primary" onClick={() => openForm(null)}><Icon name="plus"/>{tab.create}</button>}
+            {tab.create && <button type="button" className={cx(admButton('primary'), 'max-sm:w-full')} onClick={() => openForm(null)}><Icon name="plus"/>{tab.create}</button>}
             {resource === 'media' && (
               <>
-                <button type="button" className="adm-btn primary" disabled={busy} onClick={() => picker.current?.click()}><Icon name="upload"/>{busy ? 'Enviando…' : 'Enviar imagens'}</button>
+                <button type="button" className={cx(admButton('primary'), 'max-sm:w-full')} disabled={busy} onClick={() => picker.current?.click()}><Icon name="upload"/>{busy ? 'Enviando…' : 'Enviar imagens'}</button>
                 <input ref={picker} type="file" accept={IMAGE_TYPES} multiple hidden onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files); e.target.value = ''; }}/>
               </>
             )}
           </div>
 
           {cards && (
-            <div className="adm-stats">
+            <div className="mb-5 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3.5 max-sm:grid-cols-2 max-sm:gap-2.5">
               {cards.map((s) => (
-                <div className="adm-stat" key={s.label}>
-                  <span className="adm-stat-label"><Icon name={s.icon}/>{s.label}</span>
-                  <b className="adm-stat-value">{loading ? '–' : s.value}</b>
-                  {s.hint && <small className="adm-stat-hint">{s.hint}</small>}
+                <div className="grid content-start gap-2 rounded-xl border border-adm-border bg-adm-surface px-[18px] py-4 max-sm:p-3.5" key={s.label}>
+                  <span className="flex items-center gap-2 text-13 font-semibold text-adm-muted [&_svg]:size-[15px]"><Icon name={s.icon}/>{s.label}</span>
+                  <b className="text-28 leading-none font-extrabold tracking-[-0.02em] text-adm-strong tabular-nums max-sm:text-24">{loading ? '–' : s.value}</b>
+                  {s.hint && <small className="text-12 text-adm-faint">{s.hint}</small>}
                 </div>
               ))}
             </div>
@@ -898,24 +1016,44 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
 
           {draftList}
 
-          <section className={'adm-card' + (dragging ? ' dragging' : '')} aria-label={tab.title} {...dropProps}>
-            <div className="adm-toolbar">
-              <label className="adm-search">
-                <Icon name="search"/>
+          <section className={cx('relative overflow-hidden rounded-xl border bg-adm-surface', dragging ? 'border-red' : 'border-adm-border')} aria-label={tab.title} {...dropProps}>
+            <div className="flex flex-wrap items-center gap-2.5 border-b border-adm-border px-4 py-3.5">
+              <label className="relative block max-w-[360px] flex-[1_1_260px] max-sm:max-w-none">
+                <Icon name="search" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-adm-faint"/>
                 <span className="sr-only">Buscar</span>
-                <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={'Buscar em ' + tab.title.toLowerCase()}/>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={'Buscar em ' + tab.title.toLowerCase()}
+                  className="min-h-[38px] w-full rounded-lg border border-adm-border-strong bg-adm-input py-0 pr-3 pl-[38px] text-13 leading-none font-medium text-adm-text placeholder:text-adm-faint focus:border-adm-border-hover focus:shadow-[0_0_0_3px_rgb(227_20_29/0.2)] focus:outline-none"
+                />
               </label>
               {resource === 'articles' && (
-                <div className="adm-segmented" role="group" aria-label="Filtrar por status">
+                <div className="inline-flex gap-0.5 rounded-[9px] border border-adm-border-strong bg-adm-input p-[3px]" role="group" aria-label="Filtrar por status">
                   {([['all', 'Todas'], ['published', 'Publicadas'], ['draft', 'Rascunhos']] as const).map(([value, label]) => (
-                    <button type="button" key={value} aria-pressed={statusFilter === value} onClick={() => setStatusFilter(value)}>{label}</button>
+                    <button
+                      type="button"
+                      key={value}
+                      aria-pressed={statusFilter === value}
+                      className={cx('min-h-[30px] rounded-md border-0 px-3 text-12 leading-none font-bold', statusFilter === value ? 'bg-adm-strong text-adm-surface' : 'bg-transparent text-adm-muted hover:text-adm-strong')}
+                      onClick={() => setStatusFilter(value)}
+                    >
+                      {label}
+                    </button>
                   ))}
                 </div>
               )}
-              <span className="adm-count">{loading ? 'Carregando…' : visible.length === rows.length ? `${rows.length} registro(s)` : `${visible.length} de ${rows.length}`}</span>
+              <span className="ml-auto text-11 leading-none font-bold tracking-[0.1em] whitespace-nowrap text-adm-faint uppercase max-sm:ml-0 max-sm:w-full">
+                {loading ? 'Carregando…' : visible.length === rows.length ? `${rows.length} registro(s)` : `${visible.length} de ${rows.length}`}
+              </span>
             </div>
             {body}
-            {dragging && <div className="adm-dropzone" aria-hidden="true"><Icon name="upload"/>Solte para enviar</div>}
+            {dragging && (
+              <div className="pointer-events-none absolute inset-2 z-[2] flex flex-col items-center justify-center gap-2.5 rounded-[10px] border-2 border-dashed border-red bg-[color-mix(in_srgb,var(--color-adm-surface)_90%,transparent)] text-16 font-bold text-adm-strong [&_svg]:size-7 [&_svg]:text-red" aria-hidden="true">
+                <Icon name="upload"/>Solte para enviar
+              </div>
+            )}
           </section>
         </main>
       </div>
@@ -934,46 +1072,49 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
           formRef={formRef}
         >
           {form.offer && (
-            <div className="adm-callout adm-draft-offer" role="status">
+            <div className={cx(admCallout(), 'mb-4 grid gap-2.5')} role="status">
               <p>
                 Há um texto não salvo neste navegador, de {draftTimeLabel(form.offer.savedAt)}.
                 {form.offer.baseUpdatedAt !== updatedAtOf(form.row) && ' A matéria foi alterada no painel depois disso. Restaurar substitui essas alterações.'}
               </p>
-              <div className="adm-draft-actions">
-                <button type="button" className="adm-btn primary" onClick={restoreDraft}>Restaurar</button>
-                <button type="button" className="adm-btn" onClick={discardOffer}>Descartar</button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={admButton('primary')} onClick={restoreDraft}>Restaurar</button>
+                <button type="button" className={admButton()} onClick={discardOffer}>Descartar</button>
               </div>
             </div>
           )}
-          {readOnly && <p className="adm-callout info">Somente leitura: a matéria já foi publicada. Para alterá-la, fale com um editor.</p>}
-          <fieldset className="adm-fieldset" disabled={readOnly} key={form.version}>
+          {readOnly && <p className={admCallout('info')}>Somente leitura: a matéria já foi publicada. Para alterá-la, fale com um editor.</p>}
+          <fieldset className="contents" disabled={readOnly} key={form.version}>
             {resource === 'articles' && <>
-              <div className="adm-form-section">
-                <h3>Conteúdo</h3>
+              <div className="grid gap-4 not-first:border-t not-first:border-adm-border not-first:pt-5">
+                <h3 className={sectionTitle}>Conteúdo</h3>
                 <Field name="title" label="Título" value={values.title} maxLength={200} autoFocus={!edit}/>
                 <Field name="slug" label="Slug" value={values.slug} maxLength={220} hint={edit ? 'Endereço público da matéria. Mudar quebra links já compartilhados.' : 'Preenchido a partir do título. Forma o endereço /noticias/slug.'}/>
                 <TextArea name="excerpt" label="Resumo" value={values.excerpt} rows={3} minLength={10} maxLength={500} hint="Aparece na home e quando a matéria é compartilhada."/>
                 <TextArea name="content" label="Texto da matéria" value={values.content} rows={12} minLength={20} maxLength={100000} hint="Texto simples. Cada linha vira um parágrafo."/>
               </div>
-              <div className="adm-form-section">
-                <h3>Imagem</h3>
+              <div className="grid gap-4 not-first:border-t not-first:border-adm-border not-first:pt-5">
+                <h3 className={sectionTitle}>Imagem</h3>
                 <ImageField name="imageUrl" label="Imagem de capa (opcional)" value={values.imageUrl}/>
               </div>
-              <div className="adm-form-section">
-                <h3>Publicação</h3>
-                <div className="adm-grid-2">
-                  <Select name="categoryId" label="Editoria" value={values.categoryId} required>
-                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </Select>
+              <div className="grid gap-4 not-first:border-t not-first:border-adm-border not-first:pt-5">
+                <h3 className={sectionTitle}>Publicação</h3>
+                <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                  <Select name="categoryId" label="Editoria" value={values.categoryId} required options={categories.map((c) => ({ value: c.id, label: c.name }))}/>
                   <Field name="author" label="Autoria" value={values.author} maxLength={100}/>
                 </div>
                 {reporter ? (
-                  !readOnly && <p className="adm-callout info">A notícia fica como rascunho. Um editor revisa e publica.</p>
+                  !readOnly && <p className={admCallout('info')}>A notícia fica como rascunho. Um editor revisa e publica.</p>
                 ) : <>
-                  <Select name="status" label="Status" value={values.status || 'draft'}>
-                    <option value="draft">Rascunho: só no painel</option>
-                    <option value="published">Publicada: visível no portal</option>
-                  </Select>
+                  <Select
+                    name="status"
+                    label="Status"
+                    value={values.status || 'draft'}
+                    options={[
+                      { value: 'draft', label: 'Rascunho: só no painel' },
+                      { value: 'published', label: 'Publicada: visível no portal' },
+                    ]}
+                  />
                   <Switch name="featured" label="Destaque na página inicial" description="Entra no bloco de destaques do topo da home." checked={values.featured}/>
                 </>}
               </div>
@@ -994,21 +1135,23 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
 
             {resource === 'campaigns' && <>
               <Field name="name" label="Nome da campanha" value={edit?.name} maxLength={120} autoFocus={!edit}/>
-              <div className="adm-grid-2">
-                <Select name="sponsorId" label="Patrocinador" value={edit?.sponsorId || ''} required>
-                  <option value="">Selecione</option>
-                  {sponsors.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </Select>
-                <Select name="slot" label="Posição" value={edit?.slot || 'leaderboard'}>
-                  <option value="leaderboard">Banner premium</option>
-                  <option value="sidebar">Banner lateral</option>
-                </Select>
+              <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                <Select name="sponsorId" label="Patrocinador" value={edit?.sponsorId || ''} required options={[{ value: '', label: 'Selecione' }, ...sponsors.map((s) => ({ value: s.id, label: s.name }))]}/>
+                <Select
+                  name="slot"
+                  label="Posição"
+                  value={edit?.slot || 'leaderboard'}
+                  options={[
+                    { value: 'leaderboard', label: 'Banner premium' },
+                    { value: 'sidebar', label: 'Banner lateral' },
+                  ]}
+                />
               </div>
               <ImageField name="imageUrl" label="Imagem do banner" value={edit?.imageUrl} required/>
               <Field name="targetUrl" label="URL de destino" value={edit?.targetUrl} type="url" placeholder="https://"/>
-              <div className="adm-grid-2">
-                <Field name="startsAt" label="Início (horário de Brasília)" value={dateInput(edit?.startsAt)} type="datetime-local"/>
-                <Field name="endsAt" label="Fim (horário de Brasília)" value={dateInput(edit?.endsAt)} type="datetime-local"/>
+              <div className="grid grid-cols-2 gap-4 max-sm:grid-cols-1">
+                <DateTimeField name="startsAt" label="Início (horário de Brasília)" defaultValue={dateInput(edit?.startsAt)}/>
+                <DateTimeField name="endsAt" label="Fim (horário de Brasília)" defaultValue={dateInput(edit?.endsAt)}/>
               </div>
               <Switch name="active" label="Campanha ativa" description="Cada posição exibe a campanha ativa mais recente." checked={edit ? !!edit.active : true}/>
             </>}
@@ -1016,23 +1159,35 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
             {resource === 'users' && <>
               <Field name="name" label="Nome" value={edit?.name} minLength={2} maxLength={100} autoFocus={!edit}/>
               <Field name="email" label="E-mail de acesso" value={edit?.email} type="email" maxLength={200} autoComplete="off"/>
-              <fieldset className="adm-field adm-choices" disabled={self}>
-                <legend>Perfil</legend>
+              <fieldset className="group/choices m-0 grid min-w-0 gap-2 border-0 p-0" disabled={self}>
+                <legend className={cx(admLabel, 'mb-[7px]')}>Perfil</legend>
                 {(Object.keys(roleNames) as UserRole[]).map((r) => (
-                  <label className="adm-choice" key={r}>
-                    <input type="radio" name="role" value={r} defaultChecked={(edit?.role || 'reporter') === r}/>
-                    <span><b>{roleNames[r]}</b><small>{roleHelp[r]}</small></span>
+                  <label
+                    key={r}
+                    className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-adm-border bg-adm-input px-3.5 py-3 transition-[border-color,background-color] duration-150 hover:border-adm-border-strong has-checked:border-red has-checked:bg-adm-info-bg has-checked:hover:border-red group-disabled/choices:cursor-not-allowed group-disabled/choices:opacity-60"
+                  >
+                    <input
+                      type="radio"
+                      name="role"
+                      value={r}
+                      defaultChecked={(edit?.role || 'reporter') === r}
+                      className="mt-0.5 size-4 shrink-0 cursor-pointer appearance-none rounded-full border-2 border-adm-border-strong bg-adm-input transition-[border-width,border-color] duration-150 checked:border-[5px] checked:border-red disabled:cursor-not-allowed"
+                    />
+                    <span>
+                      <b className="block text-13 text-adm-strong">{roleNames[r]}</b>
+                      <small className="mt-[3px] block text-12 leading-[1.45] text-adm-muted">{roleHelp[r]}</small>
+                    </span>
                   </label>
                 ))}
-                {self && <small className="adm-hint">Você não pode mudar o próprio perfil nem desativar a própria conta.</small>}
+                {self && <small className={admHint}>Você não pode mudar o próprio perfil nem desativar a própria conta.</small>}
               </fieldset>
               {edit ? <>
                 <Switch name="active" label="Acesso ativo" description="Desativar encerra as sessões abertas na hora." checked={!!edit.active} disabled={self}/>
                 {edit.pending
-                  ? <p className="adm-callout info">Convite pendente: a pessoa ainda não criou a senha. Se você corrigir o e-mail, o link antigo deixa de valer e um convite novo vai para o endereço novo.</p>
-                  : <p className="adm-hint">A senha é trocada pelo botão “Redefinir senha” da lista.</p>}
+                  ? <p className={admCallout('info')}>Convite pendente: a pessoa ainda não criou a senha. Se você corrigir o e-mail, o link antigo deixa de valer e um convite novo vai para o endereço novo.</p>
+                  : <p className={admHint}>A senha é trocada pelo botão “Redefinir senha” da lista.</p>}
               </> : (
-                <p className="adm-callout info">A pessoa recebe um convite por e-mail e cria a própria senha pelo link, que vale 7 dias. Se o e-mail não chegar, use “Reenviar convite” na lista.</p>
+                <p className={admCallout('info')}>A pessoa recebe um convite por e-mail e cria a própria senha pelo link, que vale 7 dias. Se o e-mail não chegar, use “Reenviar convite” na lista.</p>
               )}
             </>}
           </fieldset>
@@ -1052,11 +1207,18 @@ export default function Dashboard({ categories, me, initialTab, initialTheme }: 
         />
       )}
 
+      {confirmDialog}
+
       {toast && (
-        <div key={toast.id} className={'adm-toast ' + toast.tone} role={toast.tone === 'error' ? 'alert' : 'status'}>
-          <Icon name={toast.tone === 'error' ? 'alert' : 'check'}/>
-          <p>{toast.text}</p>
-          <button type="button" className="adm-icon-btn" aria-label="Fechar aviso" onClick={() => setToast(null)}><Icon name="close"/></button>
+        <div
+          key={toast.id}
+          className="fixed right-6 bottom-6 z-60 flex max-w-[min(440px,calc(100vw-32px))] animate-toast-in items-start gap-2.5 rounded-[10px] border border-adm-border-strong bg-adm-surface py-3 pr-2 pl-3.5 text-adm-strong shadow-adm-toast max-sm:right-4 max-sm:bottom-4"
+          role={toast.tone === 'error' ? 'alert' : 'status'}
+          data-toast={toast.tone}
+        >
+          <Icon name={toast.tone === 'error' ? 'alert' : 'check'} className={cx('mt-px size-[18px]', toast.tone === 'error' ? 'text-adm-danger' : 'text-adm-ok')}/>
+          <p className="flex-1 pt-px text-13 leading-[1.5] [overflow-wrap:anywhere]">{toast.text}</p>
+          <button type="button" className={admIconButton({ small: true })} aria-label="Fechar aviso" onClick={() => setToast(null)}><Icon name="close"/></button>
         </div>
       )}
     </div>

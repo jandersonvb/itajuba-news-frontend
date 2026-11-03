@@ -5,6 +5,7 @@ import { pageParam, param, SearchParams } from '@/lib/search-params';
 import NewsIndex, { Unavailable } from '@/components/NewsIndex';
 import NewsList from '@/components/NewsList';
 import Pagination from '@/components/Pagination';
+import { eyebrow, sectionHeading } from '@/lib/styles';
 
 /** Search text, up to the 200 characters the API accepts. */
 const searchText = (p: Awaited<SearchParams>) => param(p.q).trim().slice(0, 200);
@@ -40,8 +41,8 @@ export default async function Search({ searchParams }: { searchParams: SearchPar
   if (!q) {
     return (
       <NewsIndex>
-        <div className="section-heading"><h1>Buscar notícias</h1></div>
-        <div className="empty">Digite um assunto ou palavra-chave no campo acima.</div>
+        <div className={sectionHeading}><h1>Buscar notícias</h1></div>
+        <div className="px-5 py-11 text-center text-muted">Digite um assunto ou palavra-chave no campo acima.</div>
       </NewsIndex>
     );
   }
@@ -52,9 +53,9 @@ export default async function Search({ searchParams }: { searchParams: SearchPar
     <NewsIndex search={{ q, editoria: slug }}>
       {found ? (
         <>
-          <div className="section-heading">
+          <div className={sectionHeading}>
             <h1>Resultados para “{q}”</h1>
-            <span className="eyebrow">{found.news.total} matéria(s){found.category && ' em ' + found.category.name}</span>
+            <span className={eyebrow()}>{found.news.total} matéria(s){found.category && ' em ' + found.category.name}</span>
           </div>
           <NewsList articles={found.news.items} empty="Nenhuma notícia encontrada para esta busca."/>
           <Pagination

@@ -5,7 +5,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <>
       <Header/>
-      <div id="conteudo" tabIndex={-1}>{children}</div>
+      <div id="conteudo" tabIndex={-1} className="focus:outline-none">{children}</div>
       <Footer/>
     </>
   );

@@ -58,7 +58,7 @@ export default function Terms() {
         eleito o foro da comarca de {SITE.forum} para resolver questões relacionadas a eles, ressalvado o direito do
         consumidor de propor ação no foro do seu domicílio.
       </p>
-      <p className="updated">Última atualização: <time dateTime={SITE.termsUpdatedAt}>{dayLabel(SITE.termsUpdatedAt)}</time>.</p>
+      <p className="mt-[2em]! text-15 text-muted">Última atualização: <time dateTime={SITE.termsUpdatedAt}>{dayLabel(SITE.termsUpdatedAt)}</time>.</p>
     </InfoPage>
   );
 }

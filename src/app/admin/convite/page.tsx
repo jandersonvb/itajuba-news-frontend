@@ -4,6 +4,7 @@ import Alert from '@/components/Alert';
 import InviteForm, { type Invite } from '@/components/InviteForm';
 import LoginBrand from '@/components/LoginBrand';
 import { apiHeaders, apiUrl } from '@/lib/api';
+import { loginBack, loginStep, loginTitle } from '@/lib/styles';
 
 // The token is in the URL: keep it out of the Referer header sent to other sites.
 export const metadata: Metadata = { referrer: 'no-referrer' };
@@ -24,28 +25,28 @@ export default async function InvitePage({ searchParams }: { searchParams: Promi
   const { token } = await searchParams;
   const invite = typeof token === 'string' && token ? await readInvite(token) : 'invalid';
   return (
-    <main className="login">
+    <main className="grid min-h-dvh grid-cols-2 max-lg:grid-cols-1">
       <LoginBrand/>
-      <section className="login-panel">
-        <div className="login-card">
-          <span className="login-step">Convite</span>
+      <section className="flex items-center justify-center px-(--gutter) py-[clamp(32px,5vw,64px)] max-lg:items-start">
+        <div className="w-full max-w-[400px]">
+          <span className={loginStep}>Convite</span>
           {invite === null ? (
             <>
-              <h2>Crie sua senha</h2>
+              <h2 className={loginTitle}>Crie sua senha</h2>
               <Alert tone="error" title="API indisponível">Não foi possível abrir o convite agora. Tente de novo em instantes.</Alert>
             </>
           ) : invite === 'invalid' ? (
             <>
-              <h2>Convite indisponível</h2>
+              <h2 className={loginTitle}>Convite indisponível</h2>
               <Alert tone="error" title="Convite inválido ou expirado">Os convites valem por 7 dias e só podem ser usados uma vez. Peça a um administrador para reenviar o seu.</Alert>
             </>
           ) : (
             <>
-              <h2>Crie sua senha</h2>
+              <h2 className={loginTitle}>Crie sua senha</h2>
               <InviteForm token={token as string} invite={invite}/>
             </>
           )}
-          <Link href="/admin/login" className="login-back">← Ir para o login</Link>
+          <Link href="/admin/login" className={loginBack}>← Ir para o login</Link>
         </div>
       </section>
     </main>

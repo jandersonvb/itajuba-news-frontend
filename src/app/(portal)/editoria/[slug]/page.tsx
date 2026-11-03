@@ -6,6 +6,7 @@ import { pageParam, SearchParams } from '@/lib/search-params';
 import NewsIndex from '@/components/NewsIndex';
 import NewsList from '@/components/NewsList';
 import Pagination from '@/components/Pagination';
+import { eyebrow, sectionHeading } from '@/lib/styles';
 
 type Props = { params: Promise<{ slug: string }>; searchParams: SearchParams };
 
@@ -38,7 +39,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const news = await api<ArticlePage>('/articles?' + new URLSearchParams({ page: String(page), category: category.id }));
   return (
     <NewsIndex search={{ editoria: category.slug }}>
-      <div className="section-heading"><h1>{category.name}</h1><span className="eyebrow">{news.total} matéria(s)</span></div>
+      <div className={sectionHeading}><h1>{category.name}</h1><span className={eyebrow()}>{news.total} matéria(s)</span></div>
       <NewsList articles={news.items} empty="Nenhuma notícia publicada nesta editoria."/>
       <Pagination path={'/editoria/' + category.slug} page={page} total={news.total}/>
     </NewsIndex>

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { button } from '@/lib/styles';
 
 type Props = {
   /** Path of the listing, e.g. "/editoria/cidade". */
@@ -22,9 +23,9 @@ export default function Pagination({ path, query = {}, page, total }: Props) {
   const next = total > page * PER_PAGE;
   if (page <= 1 && !next) return null;
   return (
-    <nav className="pagination" aria-label="Paginação">
-      {page > 1 && <Link className="btn light" href={href(page - 1)} rel="prev">← Anterior</Link>}
-      {next && <Link className="btn light" href={href(page + 1)} rel="next">Próxima →</Link>}
+    <nav className="mt-7 flex gap-3" aria-label="Paginação">
+      {page > 1 && <Link className={button('light')} href={href(page - 1)} rel="prev">← Anterior</Link>}
+      {next && <Link className={button('light')} href={href(page + 1)} rel="next">Próxima →</Link>}
     </nav>
   );
 }
